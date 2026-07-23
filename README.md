@@ -118,12 +118,12 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ## 3. Roadmap — du plus facile au plus difficile
 
 ### Phase 0 — Squelette du projet
-- Setup Axum + Tokio, routing de base, `tower-http` (tracing, compression, CORS)
-- Structure de projet en modules (voir section 4)
-- Un seul test end-to-end qui passe (`GET /health` → 200). Pour les tests, on évitera de lancer un serveur, mais on profitera de la possibilité de tester directement une App Axum.
-- Ajouter un fichier de CI pour github pour tester : formating via cargo fmt, le build en release, les tests via cargo nextest.
-- Ajouter un Dockerfile organisé en layers
-- Commencer un tutoriel dans le dossier `docs/tutorial` qui permettra de prendre en main toutes les fonctionnalités une par une.
+- [x] Setup Axum + Tokio, routing de base, `tower-http` (tracing, compression, CORS)
+- [x] Structure de projet en modules (voir section 4)
+- [x] Un seul test end-to-end qui passe (`GET /health` → 200). Pour les tests, on évitera de lancer un serveur, mais on profitera de la possibilité de tester directement une App Axum.
+- [x] Ajouter un fichier de CI pour github pour tester : formating via cargo fmt, le build en release, les tests via cargo nextest.
+- [x] Ajouter un Dockerfile organisé en layers
+- [x] Commencer un tutoriel dans le dossier `docs/tutorial` qui permettra de prendre en main toutes les fonctionnalités une par une.
     => on veut quelque chose de standard : get started (install, setup, deployment), tutorial (minimal), API (toutes les routes, features doccumentées à fond).
 
 ### Phase 1 — Codes HTTP & headers (le plus simple, forte valeur immédiate)
