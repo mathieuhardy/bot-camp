@@ -4,6 +4,34 @@ Every route exposed by bot-camp, documented in full. This file is updated
 as each roadmap phase (see the [README](../../README.md)) adds new
 routes.
 
+## `GET /delay/{ms}`
+
+Waits `ms` milliseconds before responding, to simulate a slow page load.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `ms` | path, `u64` | The delay, in milliseconds, before the response is sent. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)*, sent after the requested delay | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -i http://localhost:3000/delay/20
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
 ## `GET /headers/echo`
 
 Returns every header received on the request, as JSON. Handy to check

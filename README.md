@@ -129,7 +129,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ### Phase 1 — Codes HTTP & headers (le plus simple, forte valeur immédiate)
 - [x] `/status/{code}` générique
 - [x] `/headers/echo` et `/headers/set`
-- [] `/delay/{ms}`
+- [x] `/delay/{ms}`
 - [] `/large-response/{kb}`
 - [] Basic Auth simple
 

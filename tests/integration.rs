@@ -1,5 +1,7 @@
 //! Integration tests for the bot-camp server.
 
+use std::time::Instant;
+
 use axum::body::Body;
 use axum::http::Request;
 use axum::http::StatusCode;
@@ -136,4 +138,27 @@ async fn headers_set_rejects_an_invalid_header_value() {
 
     // Verify status
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn delay_waits_before_responding() {
+    // Build request
+    let request = Request::builder()
+        .uri("/delay/20")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let start = Instant::now();
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify the delay was actually observed
+    assert!(start.elapsed().as_millis() >= 20);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert!(body.is_empty());
 }
