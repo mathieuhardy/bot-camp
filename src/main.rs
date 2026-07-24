@@ -4,32 +4,13 @@
 //! against various scenarios: HTTP codes, headers, robots.txt, redirects,
 //! rate limiting, and anti-bot mechanisms.
 
-mod error;
-mod routes;
-
 use std::net::SocketAddr;
 
-use axum::Router;
-use axum::routing::get;
-use tower_http::compression::CompressionLayer;
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-/// Creates the application router with all routes and middleware.
-///
-/// # Returns
-/// A configured `Router` ready to serve requests.
-pub fn app() -> Router {
-    Router::new()
-        .route("/health", get(routes::health))
-        .route("/status/{code}", get(routes::status))
-        .layer(TraceLayer::new_for_http())
-        .layer(CompressionLayer::new())
-        .layer(CorsLayer::permissive())
-}
+use bot_camp::app;
 
 #[tokio::main]
 async fn main() {

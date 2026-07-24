@@ -117,8 +117,6 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 
 ## 3. Roadmap — du plus facile au plus difficile
 
-- Use the same app instance for tests and server !
-
 ### Phase 0 — Squelette du projet
 - [x] Setup Axum + Tokio, routing de base, `tower-http` (tracing, compression, CORS)
 - [x] Structure de projet en modules (voir section 4)
