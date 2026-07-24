@@ -130,7 +130,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 - [x] `/status/{code}` générique
 - [x] `/headers/echo` et `/headers/set`
 - [x] `/delay/{ms}`
-- [] `/large-response/{kb}`
+- [x] `/large-response/{kb}`
 - [] Basic Auth simple
 
 **Difficulté : faible.** Tout est stateless, pas de logique métier complexe. C'est le meilleur point d'entrée pour valider l'archi de routing générique.

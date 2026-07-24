@@ -25,6 +25,7 @@ pub fn app() -> Router {
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))
         .route("/health", get(routes::health))
+        .route("/large-response/{kb}", get(routes::large_response))
         .route("/status/{code}", get(routes::status))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())

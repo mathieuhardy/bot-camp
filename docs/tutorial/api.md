@@ -132,6 +132,37 @@ content-length: 0
 
 ```
 
+## `GET /large-response/{kb}`
+
+Returns a response body of a controlled size, to test how a crawler
+handles very large or very small pages.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `kb` | path, `u64` | The size of the response body, in kilobytes. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | `kb * 1024` bytes, filled with `'a'` characters | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -i http://localhost:3000/large-response/1
+```
+
+```
+HTTP/1.1 200 OK
+content-type: text/plain; charset=utf-8
+content-length: 1024
+
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...
+```
+
 ## `GET /status/{code}`
 
 Returns the requested HTTP status code. Useful to check how a crawler

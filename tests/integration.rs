@@ -141,6 +141,25 @@ async fn headers_set_rejects_an_invalid_header_value() {
 }
 
 #[tokio::test]
+async fn large_response_returns_a_body_of_the_requested_size() {
+    // Build request
+    let request = Request::builder()
+        .uri("/large-response/2")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(body.len(), 2048);
+}
+
+#[tokio::test]
 async fn delay_waits_before_responding() {
     // Build request
     let request = Request::builder()
