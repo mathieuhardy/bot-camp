@@ -11,6 +11,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Errors that can occur in the bot-camp server.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// The requested value isn't a valid HTTP header name.
+    #[error(transparent)]
+    InvalidHeaderName(#[from] axum::http::header::InvalidHeaderName),
+
+    /// The requested value isn't a valid HTTP header value.
+    #[error(transparent)]
+    InvalidHeaderValue(#[from] axum::http::header::InvalidHeaderValue),
+
     /// The requested value isn't a valid HTTP status code.
     #[error(transparent)]
     InvalidStatusCode(#[from] axum::http::status::InvalidStatusCode),
@@ -23,6 +31,8 @@ pub enum Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status = match &self {
+            Error::InvalidHeaderName(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidHeaderValue(_) => StatusCode::BAD_REQUEST,
             Error::InvalidStatusCode(_) => StatusCode::BAD_REQUEST,
             Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

@@ -21,6 +21,8 @@ pub use crate::error::{Error, Result};
 /// A configured `Router` ready to serve requests.
 pub fn app() -> Router {
     Router::new()
+        .route("/headers/echo", get(routes::echo))
+        .route("/headers/set", get(routes::set))
         .route("/health", get(routes::health))
         .route("/status/{code}", get(routes::status))
         .layer(TraceLayer::new_for_http())

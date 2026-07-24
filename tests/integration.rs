@@ -66,3 +66,74 @@ async fn status_rejects_out_of_range_values() {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }
+
+#[tokio::test]
+async fn headers_echo_returns_received_headers_as_json() {
+    // Build request
+    let request = Request::builder()
+        .uri("/headers/echo")
+        .header("x-foo", "bar")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#""x-foo":["bar"]"#));
+}
+
+#[tokio::test]
+async fn headers_set_appends_one_header_line_per_query_param() {
+    // Build request
+    let request = Request::builder()
+        .uri("/headers/set?x-foo=bar&x-foo=baz")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify headers
+    let values: Vec<_> = response.headers().get_all("x-foo").iter().collect();
+    assert_eq!(values, vec!["bar", "baz"]);
+}
+
+#[tokio::test]
+async fn headers_set_rejects_an_invalid_header_name() {
+    // Build request: "bad header" (percent-encoded space isn't a valid
+    // header name)
+    let request = Request::builder()
+        .uri("/headers/set?bad%20header=value")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn headers_set_rejects_an_invalid_header_value() {
+    // Build request: an embedded newline isn't a valid header value
+    let request = Request::builder()
+        .uri("/headers/set?x-foo=bar%0Abaz")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}

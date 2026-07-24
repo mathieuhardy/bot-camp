@@ -52,11 +52,38 @@ content-length: 0
 
 Anything outside the 100-999 range is rejected with `400 Bad Request`.
 
+## 4. Inspect and inject headers
+
+`/headers/echo` reflects back everything the server received — the
+quickest way to check what your crawler actually sends:
+
+```sh
+curl -H "X-Foo: bar" http://localhost:3000/headers/echo
+```
+
+```json
+{"accept": ["*/*"], "host": ["localhost:3000"], "x-foo": ["bar"]}
+```
+
+`/headers/set` does the opposite: it lets *you* force arbitrary response
+headers via the query string, to check how your crawler reacts to them.
+
+```sh
+curl -i "http://localhost:3000/headers/set?x-robots-tag=noindex"
+```
+
+```
+HTTP/1.1 200 OK
+x-robots-tag: noindex
+content-length: 0
+```
+
 ## What's next
 
-bot-camp is still early: `/health` and `/status/{code}` are the only
-routes so far. As routes for headers, redirects, robots.txt, rate
-limiting, and HTML content scenarios are implemented (see the
-[roadmap](../../README.md)), this tutorial will grow to walk through each
-family one by one. Until then, the [API reference](./api.md) is the
-source of truth for what's currently available.
+bot-camp is still early: `/health`, `/status/{code}`, `/headers/echo` and
+`/headers/set` are the only routes so far. As routes for redirects,
+robots.txt, rate limiting, and HTML content scenarios are implemented
+(see the [roadmap](../../README.md)), this tutorial will grow to walk
+through each family one by one. Until then, the
+[API reference](./api.md) is the source of truth for what's currently
+available.

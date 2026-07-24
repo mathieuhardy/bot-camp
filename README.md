@@ -128,7 +128,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 
 ### Phase 1 — Codes HTTP & headers (le plus simple, forte valeur immédiate)
 - [x] `/status/{code}` générique
-- [] `/headers/echo` et `/headers/set`
+- [x] `/headers/echo` et `/headers/set`
 - [] `/delay/{ms}`
 - [] `/large-response/{kb}`
 - [] Basic Auth simple
@@ -176,6 +176,11 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 - Reload de config à chaud (watch du fichier YAML)
 - Dashboard web minimal
 - Packaging pour l'auto-hébergement : binaire statique (musl), image Docker, docker-compose avec profil Redis optionnel
+
+
+### Phase 8 — Bonus
+
+- [] Generic API allowing to configure status code, response headers, etc.
 
 **Difficulté : élevée**, mais surtout par le volume de travail (pas par la complexité algorithmique) — c'est la phase "produit fini, prêt à distribuer".
 
