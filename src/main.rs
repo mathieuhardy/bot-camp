@@ -18,15 +18,14 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::routes::health;
-
 /// Creates the application router with all routes and middleware.
 ///
 /// # Returns
 /// A configured `Router` ready to serve requests.
 pub fn app() -> Router {
     Router::new()
-        .route("/health", get(health))
+        .route("/health", get(routes::health))
+        .route("/status/{code}", get(routes::status))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())

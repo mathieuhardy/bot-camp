@@ -30,3 +30,54 @@ HTTP/1.1 200 OK
 content-length: 0
 
 ```
+
+## `GET /status/{code}`
+
+Returns the requested HTTP status code. Useful to check how a crawler
+reacts to any given code, including non-standard ones.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `code` | path, `u16` | The HTTP status code to respond with. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `{code}` | *(empty)* | `code` is a valid HTTP status code (100-999). |
+| `400 Bad Request` | Error message | `code` isn't in the 100-999 range, or isn't a number. |
+
+**Examples**
+
+```sh
+curl -i http://localhost:3000/status/404
+```
+
+```
+HTTP/1.1 404 Not Found
+content-length: 0
+
+```
+
+```sh
+curl -i http://localhost:3000/status/999
+```
+
+```
+HTTP/1.1 999
+content-length: 0
+
+```
+
+```sh
+curl -i http://localhost:3000/status/1000
+```
+
+```
+HTTP/1.1 400 Bad Request
+content-length: ...
+
+invalid status code
+```

@@ -23,7 +23,7 @@ Deux familles de routes à prévoir dès le départ :
 
 ### 2.1 Codes de statut HTTP & headers
 
-- `GET /status/{code}` — retourne n'importe quel code (100 à 599, y compris les non-standards type 419, 420, 440, 444, 449, 450, 494-499, 520, 598, 599)
+- `GET /status/{code}` — retourne n'importe quel code de 100 à 999 (choix volontairement permissif, aligné sur ce que permet le crate `http` : ça couvre les non-standards type 419, 420, 440, 444, 449, 450, 494-499, 520, 598, 599, mais aussi les classes 6xx-9xx qui n'existent dans aucune RFC, utiles pour tester la robustesse d'un crawler face à un code totalement inattendu)
 - Codes informationnels 1xx (100 Continue, 102 Processing) — nécessite un support bas niveau (hyper permet ça, à vérifier selon la version)
 - `GET /headers/echo` — renvoie tous les headers reçus (façon `crawler_request_headers` et `crawler_user_agent` de crawler-test.com)
 - `GET /headers/set?name=value&name2=value2` — force des headers de réponse arbitraires (Content-Type malformé, X-Robots-Tag, Cache-Control, HSTS, Content-Encoding annoncé mais absent, etc.)
@@ -117,6 +117,8 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 
 ## 3. Roadmap — du plus facile au plus difficile
 
+- Use the same app instance for tests and server !
+
 ### Phase 0 — Squelette du projet
 - [x] Setup Axum + Tokio, routing de base, `tower-http` (tracing, compression, CORS)
 - [x] Structure de projet en modules (voir section 4)
@@ -127,11 +129,11 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
     => on veut quelque chose de standard : get started (install, setup, deployment), tutorial (minimal), API (toutes les routes, features doccumentées à fond).
 
 ### Phase 1 — Codes HTTP & headers (le plus simple, forte valeur immédiate)
-- `/status/{code}` générique
-- `/headers/echo` et `/headers/set`
-- `/delay/{ms}`
-- `/large-response/{kb}`
-- Basic Auth simple
+- [x] `/status/{code}` générique
+- [] `/headers/echo` et `/headers/set`
+- [] `/delay/{ms}`
+- [] `/large-response/{kb}`
+- [] Basic Auth simple
 
 **Difficulté : faible.** Tout est stateless, pas de logique métier complexe. C'est le meilleur point d'entrée pour valider l'archi de routing générique.
 

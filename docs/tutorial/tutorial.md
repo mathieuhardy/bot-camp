@@ -33,10 +33,29 @@ HTTP/1.1 200 OK
 content-length: 0
 ```
 
+## 3. Ask for a specific HTTP status code
+
+`/status/{code}` is the first crawler-testing route: it makes the server
+respond with whatever status code you ask for, so you can check how your
+crawler reacts to it.
+
+```sh
+curl -i http://localhost:3000/status/404
+```
+
+Expected response:
+
+```
+HTTP/1.1 404 Not Found
+content-length: 0
+```
+
+Anything outside the 100-999 range is rejected with `400 Bad Request`.
+
 ## What's next
 
-bot-camp is still at the skeleton stage: `/health` is the only route so
-far. As routes for HTTP status codes, redirects, robots.txt, rate
+bot-camp is still early: `/health` and `/status/{code}` are the only
+routes so far. As routes for headers, redirects, robots.txt, rate
 limiting, and HTML content scenarios are implemented (see the
 [roadmap](../../README.md)), this tutorial will grow to walk through each
 family one by one. Until then, the [API reference](./api.md) is the
