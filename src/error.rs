@@ -19,6 +19,14 @@ pub enum Error {
     #[error(transparent)]
     InvalidHeaderValue(#[from] axum::http::header::InvalidHeaderValue),
 
+    /// The requested code doesn't represent an HTTP redirect.
+    #[error("not a redirect status code: {0}")]
+    InvalidRedirectCode(u16),
+
+    /// The requested number of loop positions isn't valid.
+    #[error("invalid number of redirect loop steps: {0}")]
+    InvalidRedirectSteps(u32),
+
     /// The requested value isn't a valid HTTP status code.
     #[error(transparent)]
     InvalidStatusCode(#[from] axum::http::status::InvalidStatusCode),
@@ -33,6 +41,8 @@ impl IntoResponse for Error {
         let status = match &self {
             Error::InvalidHeaderName(_) => StatusCode::BAD_REQUEST,
             Error::InvalidHeaderValue(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidRedirectCode(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidRedirectSteps(_) => StatusCode::BAD_REQUEST,
             Error::InvalidStatusCode(_) => StatusCode::BAD_REQUEST,
             Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

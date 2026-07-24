@@ -231,3 +231,99 @@ async fn delay_waits_before_responding() {
     let body = response.into_body().collect().await.unwrap().to_bytes();
     assert!(body.is_empty());
 }
+
+#[tokio::test]
+async fn redirect_returns_the_requested_code_and_location() {
+    // Build request
+    let request = Request::builder()
+        .uri("/redirect/301?to=/status/200")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::MOVED_PERMANENTLY);
+
+    // Verify location
+    assert_eq!(response.headers().get("location").unwrap(), "/status/200");
+}
+
+#[tokio::test]
+async fn redirect_rejects_a_non_redirect_code() {
+    // Build request: 200 isn't a redirect status
+    let request = Request::builder()
+        .uri("/redirect/200?to=/status/200")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn redirect_chain_decrements_n_until_it_reaches_to() {
+    // Build request
+    let request = Request::builder()
+        .uri("/redirect/chain?n=2&to=/status/200")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::FOUND);
+
+    // Verify location points at the next hop
+    assert_eq!(
+        response.headers().get("location").unwrap(),
+        "/redirect/chain?n=1&to=/status/200"
+    );
+}
+
+#[tokio::test]
+async fn redirect_loop_cycles_through_its_positions() {
+    // Build request
+    let request = Request::builder()
+        .uri("/redirect/loop?steps=2&step=1")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::FOUND);
+
+    // Verify location wraps back to the first position
+    assert_eq!(
+        response.headers().get("location").unwrap(),
+        "/redirect/loop?steps=2&step=0"
+    );
+}
+
+#[tokio::test]
+async fn redirect_refresh_sets_the_refresh_header() {
+    // Build request
+    let request = Request::builder()
+        .uri("/redirect/refresh?delay=5&to=/status/200")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify the refresh header
+    assert_eq!(
+        response.headers().get("refresh").unwrap(),
+        "5; url=/status/200"
+    );
+}

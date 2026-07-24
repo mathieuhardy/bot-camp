@@ -136,10 +136,11 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 **Difficulté : faible.** Tout est stateless, pas de logique métier complexe. C'est le meilleur point d'entrée pour valider l'archi de routing générique.
 
 ### Phase 2 — Redirects & canonical
-- Redirections 301/302/307/308 paramétrables, chaînes, boucles
-- Meta refresh / header refresh
-- Canonical tag (templating HTML nécessaire → introduire un moteur de templates ici, ex: Askama ou MiniJinja)
-- Cas de normalisation d'URL (casse, trailing slash, ordre des params)
+- [x] Redirections 301/302/307/308 paramétrables, chaînes, boucles
+- [x] Header Refresh (`/redirect/refresh`)
+- [] Meta refresh (nécessite le moteur de templates, cf ci-dessous)
+- [] Canonical tag (templating HTML nécessaire → introduire un moteur de templates ici, ex: Askama ou MiniJinja)
+- [] Cas de normalisation d'URL (casse, trailing slash, ordre des params)
 
 **Difficulté : faible à moyenne.** Nécessite de générer du HTML dynamique proprement — bon moment pour choisir et mettre en place le moteur de templates que tu garderas pour tout le reste.
 
@@ -181,6 +182,8 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ### Phase 8 — Bonus
 
 - [] Generic API allowing to configure status code, response headers, etc.
+- [] Discovery d'urls (dans html).
+- [] Setters for robots.txt, etc.
 
 **Difficulté : élevée**, mais surtout par le volume de travail (pas par la complexité algorithmique) — c'est la phase "produit fini, prêt à distribuer".
 

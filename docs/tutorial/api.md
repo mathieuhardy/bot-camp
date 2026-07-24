@@ -210,6 +210,153 @@ content-length: 1024
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...
 ```
 
+## `GET /redirect/{code}`
+
+Redirects to an arbitrary URL with a given redirect status code. Useful
+to check that a crawler follows redirects correctly and treats each
+status code according to its own semantics (e.g. whether the method is
+preserved).
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `code` | path, `u16` | The redirect status code: `300`, `301`, `302`, `303`, `307`, or `308`. |
+| `to` | query, string | The URL to redirect to, absolute or relative. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `{code}` | *(empty)*, with a `Location: {to}` header | `code` is a valid redirect status and `to` is a valid header value. |
+| `400 Bad Request` | Error message | `code` isn't one of the redirect statuses above, or `to` isn't a valid header value. |
+
+**Examples**
+
+```sh
+curl -i "http://localhost:3000/redirect/301?to=/status/200"
+```
+
+```
+HTTP/1.1 301 Moved Permanently
+location: /status/200
+content-length: 0
+
+```
+
+```sh
+curl -i "http://localhost:3000/redirect/200?to=/status/200"
+```
+
+```
+HTTP/1.1 400 Bad Request
+content-length: ...
+
+not a redirect status code: 200
+```
+
+## `GET /redirect/chain`
+
+Redirects through a configurable number of intermediate hops before
+landing on a final URL, to test that a crawler correctly follows a
+redirect chain.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `n` | query, `u32` | Number of hops remaining before landing on `to`. |
+| `to` | query, string | The URL to land on once the chain completes. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `302 Found` | *(empty)*, with a `Location` header pointing either at `/redirect/chain?n={n-1}&to={to}` (while `n` is positive) or directly at `to` (once `n` reaches `0`) | `to` is a valid header value. |
+| `400 Bad Request` | Error message | `to` isn't a valid header value. |
+
+**Example**
+
+```sh
+curl -i "http://localhost:3000/redirect/chain?n=2&to=/status/200"
+```
+
+```
+HTTP/1.1 302 Found
+location: /redirect/chain?n=1&to=/status/200
+content-length: 0
+
+```
+
+## `GET /redirect/loop`
+
+Redirects forever, cycling through a configurable number of positions,
+to test that a crawler detects and breaks out of a redirect loop instead
+of following it endlessly. `steps=1` is an immediate self-loop; `steps=2`
+is the classic A→B→A case.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `steps` | query, `u32` | Total number of positions in the loop. Must be at least `1`. |
+| `step` | query, `u32` | Current position in the loop. Defaults to `0`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `302 Found` | *(empty)*, with a `Location` header pointing at `/redirect/loop?steps={steps}&step={(step+1) % steps}` | `steps` is at least `1`. |
+| `400 Bad Request` | Error message | `steps` is `0`. |
+
+**Example**
+
+```sh
+curl -i "http://localhost:3000/redirect/loop?steps=2&step=1"
+```
+
+```
+HTTP/1.1 302 Found
+location: /redirect/loop?steps=2&step=0
+content-length: 0
+
+```
+
+## `GET /redirect/refresh`
+
+Redirects to a URL via a `Refresh` response header instead of a real
+`3xx` status, the way old-school "you will be redirected in N seconds"
+pages do. Useful to check whether a crawler recognizes this
+non-standard, header-based redirect mechanism in addition to real
+`Location`-based redirects.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `delay` | query, `u64` | Delay, in seconds, announced in the `Refresh` header. |
+| `to` | query, string | The URL to redirect to. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)*, with a `Refresh: {delay}; url={to}` header | `to` is a valid header value. |
+| `400 Bad Request` | Error message | `to` isn't a valid header value. |
+
+**Example**
+
+```sh
+curl -i "http://localhost:3000/redirect/refresh?delay=5&to=/status/200"
+```
+
+```
+HTTP/1.1 200 OK
+refresh: 5; url=/status/200
+content-length: 0
+
+```
+
 ## `GET /status/{code}`
 
 Returns the requested HTTP status code. Useful to check how a crawler
