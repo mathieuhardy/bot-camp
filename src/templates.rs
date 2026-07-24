@@ -1,0 +1,120 @@
+//! Shared HTML page rendering for content-based test endpoints.
+
+use minijinja::AutoEscape;
+use minijinja::Environment;
+use serde::Serialize;
+
+/// Name under which the shared page skeleton is registered.
+const TEMPLATE_NAME: &str = "page.html";
+
+/// The shared HTML page skeleton: a title, zero or more canonical links
+/// (in the head and/or the body), an optional `og:url` meta tag, an
+/// optional meta-refresh tag, and a body.
+const TEMPLATE_SOURCE: &str = include_str!("../templates/page.html");
+
+/// Values interpolated into the shared page skeleton.
+#[derive(Default, Serialize)]
+pub(crate) struct PageContext {
+    /// The page's `<title>`.
+    pub(crate) title: String,
+
+    /// Canonical link hrefs to render inside `<head>`.
+    pub(crate) canonical_in_head: Vec<String>,
+
+    /// Canonical link hrefs to render inside `<body>`, to simulate an
+    /// invalid placement.
+    pub(crate) canonical_in_body: Vec<String>,
+
+    /// `og:url` meta tag content, if any.
+    pub(crate) og_url: Option<String>,
+
+    /// `meta http-equiv="refresh"` content attribute, if any.
+    pub(crate) refresh: Option<String>,
+
+    /// Body text.
+    pub(crate) body: String,
+}
+
+/// Renders the shared HTML skeleton with `context`, HTML-escaping every
+/// interpolated value.
+///
+/// MiniJinja's built-in HTML autoescaper also escapes `/` (as
+/// `&#x2f;`), which would mangle every URL rendered by this tool. Escape
+/// the five characters that actually matter ourselves instead, and turn
+/// autoescaping off.
+///
+/// # Returns
+/// The rendered HTML.
+pub(crate) fn render_page(context: PageContext) -> String {
+    let context = PageContext {
+        title: escape_html(&context.title),
+        canonical_in_head: context
+            .canonical_in_head
+            .iter()
+            .map(|s| escape_html(s))
+            .collect(),
+        canonical_in_body: context
+            .canonical_in_body
+            .iter()
+            .map(|s| escape_html(s))
+            .collect(),
+        og_url: context.og_url.as_deref().map(escape_html),
+        refresh: context.refresh.as_deref().map(escape_html),
+        body: escape_html(&context.body),
+    };
+
+    let mut env = Environment::new();
+    env.set_auto_escape_callback(|_| AutoEscape::None);
+    env.add_template(TEMPLATE_NAME, TEMPLATE_SOURCE)
+        .expect("bundled template is valid MiniJinja syntax");
+
+    env.get_template(TEMPLATE_NAME)
+        .expect("template was just registered under TEMPLATE_NAME")
+        .render(context)
+        .expect("rendering a fully-populated PageContext cannot fail")
+}
+
+/// Escapes the five characters that are unsafe to interpolate into HTML
+/// text or a quoted attribute value: `&`, `<`, `>`, `"`, `'`.
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PageContext;
+    use super::render_page;
+
+    #[test]
+    fn escapes_interpolated_values() {
+        let context = PageContext {
+            title: "<script>".to_string(),
+            ..Default::default()
+        };
+
+        let html = render_page(context);
+
+        assert!(!html.contains("<script>"));
+        assert!(html.contains("&lt;script&gt;"));
+    }
+
+    #[test]
+    fn renders_canonical_links_in_head_and_body() {
+        let context = PageContext {
+            canonical_in_head: vec!["/a".to_string()],
+            canonical_in_body: vec!["/b".to_string()],
+            ..Default::default()
+        };
+
+        let html = render_page(context);
+        let head_end = html.find("</head>").unwrap();
+
+        assert!(html[..head_end].contains(r#"href="/a""#));
+        assert!(html[head_end..].contains(r#"href="/b""#));
+    }
+}

@@ -327,3 +327,66 @@ async fn redirect_refresh_sets_the_refresh_header() {
         "5; url=/status/200"
     );
 }
+
+#[tokio::test]
+async fn redirect_meta_refresh_embeds_the_expected_tag() {
+    // Build request
+    let request = Request::builder()
+        .uri("/redirect/meta-refresh?delay=5&to=/status/200")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#"<meta http-equiv="refresh" content="5; url=/status/200">"#));
+}
+
+#[tokio::test]
+async fn canonical_renders_a_self_referential_link_by_default() {
+    // Build request
+    let request = Request::builder()
+        .uri("/canonical?to=/page")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert_eq!(body.matches(r#"href="/page""#).count(), 1);
+}
+
+#[tokio::test]
+async fn canonical_can_duplicate_and_move_the_tag_into_the_body() {
+    // Build request
+    let request = Request::builder()
+        .uri("/canonical?to=/page&duplicate=true&in_body=true")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    let head_end = body.find("</head>").unwrap();
+
+    // Verify no canonical link ended up in the head
+    assert!(!body[..head_end].contains(r#"href="/page""#));
+
+    // Verify both duplicated links ended up in the body
+    assert_eq!(body[head_end..].matches(r#"href="/page""#).count(), 2);
+}

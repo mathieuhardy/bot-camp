@@ -1,5 +1,5 @@
-//! Redirect endpoints: single-hop, chained, looping, and header-based
-//! (`Refresh`) redirects.
+//! Redirect endpoints: single-hop, chained, looping, and header- or
+//! meta-tag-based (`Refresh`) redirects.
 
 use axum::extract::Path;
 use axum::extract::Query;
@@ -8,10 +8,13 @@ use axum::http::HeaderName;
 use axum::http::HeaderValue;
 use axum::http::StatusCode;
 use axum::http::header::LOCATION;
+use axum::response::Html;
 use serde::Deserialize;
 
 use crate::error::Error;
 use crate::error::Result;
+use crate::templates::PageContext;
+use crate::templates::render_page;
 
 /// HTTP status codes that represent an HTTP redirect.
 const REDIRECT_CODES: [u16; 6] = [300, 301, 302, 303, 307, 308];
@@ -47,10 +50,11 @@ pub(crate) struct LoopParams {
     step: u32,
 }
 
-/// Query parameters accepted by [`redirect_refresh`].
+/// Query parameters accepted by [`redirect_refresh`] and
+/// [`redirect_meta_refresh`].
 #[derive(Deserialize)]
 pub(crate) struct RefreshParams {
-    /// Delay, in seconds, announced in the `Refresh` header.
+    /// Delay, in seconds, announced in the refresh.
     delay: u64,
 
     /// The URL to redirect to.
@@ -116,13 +120,36 @@ pub async fn redirect_loop(Query(params): Query<LoopParams>) -> Result<(StatusCo
 /// isn't a valid header value.
 pub async fn redirect_refresh(Query(params): Query<RefreshParams>) -> Result<HeaderMap> {
     let mut headers = HeaderMap::new();
-    let value = format!("{}; url={}", params.delay, params.to);
     headers.insert(
         HeaderName::from_static("refresh"),
-        HeaderValue::from_str(&value)?,
+        HeaderValue::from_str(&refresh_content(&params))?,
     );
 
     Ok(headers)
+}
+
+/// Redirects to `to` via an HTML `<meta http-equiv="refresh">` tag
+/// instead of a real HTTP redirect status or the `Refresh` header, the
+/// way old-school "you will be redirected in N seconds" pages do.
+///
+/// # Returns
+/// `200 OK` with an HTML page whose `<head>` holds
+/// `<meta http-equiv="refresh" content="delay; url=to">`.
+pub async fn redirect_meta_refresh(Query(params): Query<RefreshParams>) -> Html<String> {
+    let context = PageContext {
+        title: "Meta refresh".to_string(),
+        refresh: Some(refresh_content(&params)),
+        body: "Redirecting…".to_string(),
+        ..Default::default()
+    };
+
+    Html(render_page(context))
+}
+
+/// Builds the `delay; url=to` value shared by the header-based and
+/// meta-tag-based refresh redirects.
+fn refresh_content(params: &RefreshParams) -> String {
+    format!("{}; url={}", params.delay, params.to)
 }
 
 /// Returns `code` as a `StatusCode` if it represents an HTTP redirect, or
@@ -157,6 +184,7 @@ mod tests {
     use super::redirect;
     use super::redirect_chain;
     use super::redirect_loop;
+    use super::redirect_meta_refresh;
     use super::redirect_refresh;
 
     #[tokio::test]
@@ -241,5 +269,17 @@ mod tests {
         let headers = redirect_refresh(Query(params)).await.unwrap();
 
         assert_eq!(headers.get("refresh").unwrap(), "5; url=/status/200");
+    }
+
+    #[tokio::test]
+    async fn meta_refresh_embeds_the_expected_tag() {
+        let params = RefreshParams {
+            delay: 5,
+            to: "/status/200".to_string(),
+        };
+
+        let html = redirect_meta_refresh(Query(params)).await.0;
+
+        assert!(html.contains(r#"<meta http-equiv="refresh" content="5; url=/status/200">"#));
     }
 }

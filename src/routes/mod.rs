@@ -1,6 +1,7 @@
 //! HTTP route handlers for the bot-camp server.
 
 mod auth;
+mod canonical;
 mod delay;
 mod headers;
 mod health;
@@ -9,6 +10,7 @@ mod redirect;
 mod status;
 
 pub use auth::basic;
+pub use canonical::canonical;
 pub use delay::delay;
 pub use headers::echo;
 pub use headers::set;
@@ -17,5 +19,6 @@ pub use large_response::large_response;
 pub use redirect::redirect;
 pub use redirect::redirect_chain;
 pub use redirect::redirect_loop;
+pub use redirect::redirect_meta_refresh;
 pub use redirect::redirect_refresh;
 pub use status::status;

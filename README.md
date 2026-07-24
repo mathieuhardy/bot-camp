@@ -138,9 +138,9 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ### Phase 2 — Redirects & canonical
 - [x] Redirections 301/302/307/308 paramétrables, chaînes, boucles
 - [x] Header Refresh (`/redirect/refresh`)
-- [] Meta refresh (nécessite le moteur de templates, cf ci-dessous)
-- [] Canonical tag (templating HTML nécessaire → introduire un moteur de templates ici, ex: Askama ou MiniJinja)
-- [] Cas de normalisation d'URL (casse, trailing slash, ordre des params)
+- [x] Meta refresh (`/redirect/meta-refresh`) — moteur de templates : MiniJinja
+- [x] Canonical tag (`/canonical` : self-référentiel/cross-page, relative/absolue, dupliqué, hors `<head>`, conflit `og:url`)
+- [] Cas de normalisation d'URL (casse, trailing slash, ordre des params) — déjà testable via `/canonical?to=...` en choisissant la valeur de `to`, pas d'endpoint dédié nécessaire
 
 **Difficulté : faible à moyenne.** Nécessite de générer du HTML dynamique proprement — bon moment pour choisir et mettre en place le moteur de templates que tu garderas pour tout le reste.
 

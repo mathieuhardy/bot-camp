@@ -51,6 +51,66 @@ content-length: 0
 
 ```
 
+## `GET /canonical`
+
+Returns an HTML page carrying a `<link rel="canonical">` tag, to test how
+a crawler handles the classic canonicalization edge cases: self-vs-cross
+page, relative vs absolute, duplicated, placed outside `<head>`, or
+conflicting with `og:url`.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `to` | query, string | The canonical URL. Pass the page's own URL for a self-referential canonical, or another page's URL to test cross-page canonicalization; relative or absolute, whatever `to` holds. |
+| `og_url` | query, string | Optional. Adds a conflicting `<meta property="og:url">` tag. |
+| `duplicate` | query, bool | Optional, defaults to `false`. Emits the canonical tag twice. |
+| `in_body` | query, bool | Optional, defaults to `false`. Moves the canonical tag(s) into `<body>` instead of `<head>` — an invalid placement a crawler should reject. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page | Always — the handler cannot fail. |
+
+**Examples**
+
+```sh
+curl -s "http://localhost:3000/canonical?to=/page"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+<title>Canonical</title>
+<link rel="canonical" href="/page">
+</head>
+<body>
+Canonical tag test page.
+</body>
+</html>
+```
+
+```sh
+curl -s "http://localhost:3000/canonical?to=/page&duplicate=true&in_body=true&og_url=/other"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+<title>Canonical</title>
+<meta property="og:url" content="/other">
+</head>
+<body>
+Canonical tag test page.
+<link rel="canonical" href="/page">
+<link rel="canonical" href="/page">
+</body>
+</html>
+```
+
 ## `GET /delay/{ms}`
 
 Waits `ms` milliseconds before responding, to simulate a slow page load.
@@ -320,6 +380,45 @@ HTTP/1.1 302 Found
 location: /redirect/loop?steps=2&step=0
 content-length: 0
 
+```
+
+## `GET /redirect/meta-refresh`
+
+Redirects to a URL via an HTML `<meta http-equiv="refresh">` tag instead
+of a real `3xx` status or the `Refresh` header — the HTML-level twin of
+`/redirect/refresh`. Useful to check whether a crawler parses the
+`<head>` for this legacy redirect mechanism.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `delay` | query, `u64` | Delay, in seconds, announced in the meta-refresh tag. |
+| `to` | query, string | The URL to redirect to. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | An HTML page whose `<head>` holds `<meta http-equiv="refresh" content="{delay}; url={to}">` | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -s "http://localhost:3000/redirect/meta-refresh?delay=5&to=/status/200"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+<title>Meta refresh</title>
+<meta http-equiv="refresh" content="5; url=/status/200">
+</head>
+<body>
+Redirecting…
+</body>
+</html>
 ```
 
 ## `GET /redirect/refresh`

@@ -6,6 +6,7 @@
 
 mod error;
 mod routes;
+mod templates;
 
 use axum::Router;
 use axum::routing::get;
@@ -22,6 +23,7 @@ pub use crate::error::{Error, Result};
 pub fn app() -> Router {
     Router::new()
         .route("/auth/basic", get(routes::basic))
+        .route("/canonical", get(routes::canonical))
         .route("/delay/{ms}", get(routes::delay))
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))
@@ -29,6 +31,7 @@ pub fn app() -> Router {
         .route("/large-response/{kb}", get(routes::large_response))
         .route("/redirect/chain", get(routes::redirect_chain))
         .route("/redirect/loop", get(routes::redirect_loop))
+        .route("/redirect/meta-refresh", get(routes::redirect_meta_refresh))
         .route("/redirect/refresh", get(routes::redirect_refresh))
         .route("/redirect/{code}", get(routes::redirect))
         .route("/status/{code}", get(routes::status))

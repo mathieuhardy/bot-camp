@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+    <head>
+        <title>{{ title }}</title>
+
+        {% for href in canonical_in_head %}
+        <link rel="canonical" href="{{ href }}">
+        {% endfor %}
+
+        {% if og_url %}
+        <meta property="og:url" content="{{ og_url }}">
+        {% endif %}
+
+        {% if refresh %}
+        <meta http-equiv="refresh" content="{{ refresh }}">
+        {% endif %}
+    </head>
+
+    <body>
+        {{ body }}
+
+        {% for href in canonical_in_body %}
+        <link rel="canonical" href="{{ href }}">
+        {% endfor %}
+    </body>
+</html>
