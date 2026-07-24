@@ -4,6 +4,53 @@ Every route exposed by bot-camp, documented in full. This file is updated
 as each roadmap phase (see the [README](../../README.md)) adds new
 routes.
 
+## `GET /auth/basic`
+
+HTTP Basic Auth challenge. Checks that a crawler handles a `401` cleanly
+(no crash, no infinite retry, no indexing of the challenge page), and
+lets you configure your own crawler with the credentials below to verify
+it can also authenticate successfully when told to.
+
+The valid credentials are published here on purpose — the point is to
+test known-good and known-bad paths, not to make anything guess them:
+username `bot-camp`, password `bot-camp`.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `Authorization` header | `Basic <base64(username:password)>` | Optional. Omit it to trigger the challenge. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | `Authorization` holds the valid `bot-camp:bot-camp` credentials. |
+| `401 Unauthorized` | *(empty)*, with a `WWW-Authenticate: Basic realm="bot-camp"` header | `Authorization` is missing, malformed, or holds the wrong credentials. |
+
+**Examples**
+
+```sh
+curl -i http://localhost:3000/auth/basic
+```
+
+```
+HTTP/1.1 401 Unauthorized
+www-authenticate: Basic realm="bot-camp"
+content-length: 0
+
+```
+
+```sh
+curl -i -u bot-camp:bot-camp http://localhost:3000/auth/basic
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
 ## `GET /delay/{ms}`
 
 Waits `ms` milliseconds before responding, to simulate a slow page load.

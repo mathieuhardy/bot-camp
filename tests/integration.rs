@@ -11,6 +11,56 @@ use tower::ServiceExt;
 use bot_camp::app;
 
 #[tokio::test]
+async fn auth_basic_accepts_the_expected_credentials() {
+    // Build request: "bot-camp:bot-camp" base64-encoded
+    let request = Request::builder()
+        .uri("/auth/basic")
+        .header("Authorization", "Basic Ym90LWNhbXA6Ym90LWNhbXA=")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn auth_basic_challenges_a_missing_authorization_header() {
+    // Build request
+    let request = Request::builder()
+        .uri("/auth/basic")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // Verify the challenge header is present
+    assert!(response.headers().contains_key("www-authenticate"));
+}
+
+#[tokio::test]
+async fn auth_basic_rejects_wrong_credentials() {
+    // Build request: "bot-camp:wrong" base64-encoded
+    let request = Request::builder()
+        .uri("/auth/basic")
+        .header("Authorization", "Basic Ym90LWNhbXA6d3Jvbmc=")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn health_returns_200() {
     // Build request
     let request = Request::builder()

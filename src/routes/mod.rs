@@ -1,11 +1,13 @@
 //! HTTP route handlers for the bot-camp server.
 
+mod auth;
 mod delay;
 mod headers;
 mod health;
 mod large_response;
 mod status;
 
+pub use auth::basic;
 pub use delay::delay;
 pub use headers::echo;
 pub use headers::set;

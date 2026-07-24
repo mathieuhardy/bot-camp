@@ -21,6 +21,7 @@ pub use crate::error::{Error, Result};
 /// A configured `Router` ready to serve requests.
 pub fn app() -> Router {
     Router::new()
+        .route("/auth/basic", get(routes::basic))
         .route("/delay/{ms}", get(routes::delay))
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))

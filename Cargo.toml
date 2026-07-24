@@ -9,20 +9,14 @@ authors = ["mhardy"]
 [dependencies]
 # Web framework
 axum = "0.8"
+base64 = "0.23"
+thiserror = "2"
 tokio = { version = "1", features = ["full"] }
-
-# Middleware (tracing, compression, CORS)
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "trace"] }
-
-# Error handling
-thiserror = "2"
-
-# Logging / tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
-# Integration testing
-tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
