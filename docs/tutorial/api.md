@@ -513,6 +513,121 @@ content-length: 0
 
 ```
 
+## `GET /robots.txt`
+
+Returns the `robots.txt` contents currently held in memory. Unlike every
+other route in bot-camp, a crawler always requests `robots.txt` at that
+exact path, with no query string — so its content can't be steered
+through the URL the way `/canonical` or `/normalize` are. Configure it
+first with `PUT /robots.txt`, then point your crawler at the site.
+
+**Request**
+
+No parameters, no body.
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The current `robots.txt` contents (`text/plain`) | Always — the handler cannot fail. Defaults to `User-agent: *\nAllow: /\n` until a `PUT` sets it. |
+
+**Example**
+
+```sh
+curl -s http://localhost:3000/robots.txt
+```
+
+```
+User-agent: *
+Allow: /
+```
+
+## `PUT /robots.txt`
+
+Overwrites the contents served by `GET /robots.txt` with the request
+body, verbatim — no parsing, no validation. Craft whichever edge case
+you want to test directly in the body: an empty line in the middle, an
+`Allow` longer/shorter/equal to its `Disallow`, duplicated directives,
+mixed casing, several `User-agent` groups, a `Crawl-delay`, a
+`Sitemap:` line.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| Request body | text | The exact contents to serve back from `GET /robots.txt`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -i -X PUT http://localhost:3000/robots.txt --data-binary $'User-agent: Googlebot\nDisallow: /private\n'
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
+## `GET /robots/meta`
+
+Returns an HTML page carrying a `<meta name="robots">` tag, and
+optionally an `X-Robots-Tag` response header, to test the classic
+meta-robots edge cases: directive combinations, case variations,
+duplication, and a deliberate conflict between the meta tag and the
+header.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `directives` | query, string | The `content` attribute value, verbatim — e.g. `noindex,nofollow`, in whatever casing or combination you want to test. |
+| `x_robots_tag` | query, string | Optional. Sets an `X-Robots-Tag` response header with its own value, to test a meta-tag/header conflict. |
+| `duplicate` | query, bool | Optional, defaults to `false`. Emits the meta tag twice. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page, with the `X-Robots-Tag` header if `x_robots_tag` was given | `x_robots_tag` is a valid header value, or absent. |
+| `400 Bad Request` | Error message | `x_robots_tag` isn't a valid header value. |
+
+**Examples**
+
+```sh
+curl -s "http://localhost:3000/robots/meta?directives=noindex,nofollow"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+<title>Robots meta</title>
+<meta name="robots" content="noindex,nofollow">
+</head>
+<body>
+Robots meta tag test page.
+</body>
+</html>
+```
+
+```sh
+curl -i "http://localhost:3000/robots/meta?directives=index&x_robots_tag=noindex"
+```
+
+```
+HTTP/1.1 200 OK
+x-robots-tag: noindex
+content-length: ...
+
+```
+
 ## `GET /status/{code}`
 
 Returns the requested HTTP status code. Useful to check how a crawler

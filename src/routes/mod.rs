@@ -8,6 +8,7 @@ mod health;
 mod large_response;
 mod normalize;
 mod redirect;
+mod robots;
 mod status;
 
 pub use auth::basic;
@@ -23,4 +24,7 @@ pub use redirect::redirect_chain;
 pub use redirect::redirect_loop;
 pub use redirect::redirect_meta_refresh;
 pub use redirect::redirect_refresh;
+pub use robots::robots_meta;
+pub use robots::robots_txt;
+pub use robots::set_robots_txt;
 pub use status::status;

@@ -31,6 +31,10 @@ pub(crate) struct PageContext {
     /// `meta http-equiv="refresh"` content attribute, if any.
     pub(crate) refresh: Option<String>,
 
+    /// `meta name="robots"` content attribute values to render, one tag
+    /// per entry.
+    pub(crate) meta_robots: Vec<String>,
+
     /// Body text.
     pub(crate) body: String,
 }
@@ -60,6 +64,7 @@ pub(crate) fn render_page(context: PageContext) -> String {
             .collect(),
         og_url: context.og_url.as_deref().map(escape_html),
         refresh: context.refresh.as_deref().map(escape_html),
+        meta_robots: context.meta_robots.iter().map(|s| escape_html(s)).collect(),
         body: escape_html(&context.body),
     };
 

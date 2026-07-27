@@ -420,6 +420,83 @@ async fn normalize_rejects_an_unparseable_url() {
 }
 
 #[tokio::test]
+async fn robots_txt_serves_the_default_content_initially() {
+    // Build request
+    let request = Request::builder()
+        .uri("/robots.txt")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert_eq!(body, "User-agent: *\nAllow: /\n");
+}
+
+#[tokio::test]
+async fn robots_txt_reflects_a_prior_put() {
+    // A single router instance, so its in-memory state is shared across
+    // both requests below
+    let router = app();
+
+    // Build the PUT request
+    let put_request = Request::builder()
+        .method("PUT")
+        .uri("/robots.txt")
+        .body(Body::from("User-agent: Googlebot\nDisallow: /private\n"))
+        .unwrap();
+
+    // Send the PUT request
+    let put_response = router.clone().oneshot(put_request).await.unwrap();
+
+    // Verify status
+    assert_eq!(put_response.status(), StatusCode::OK);
+
+    // Build the follow-up GET request
+    let get_request = Request::builder()
+        .uri("/robots.txt")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send the GET request
+    let get_response = router.oneshot(get_request).await.unwrap();
+
+    // Verify the GET reflects what was PUT
+    let body = get_response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert_eq!(body, "User-agent: Googlebot\nDisallow: /private\n");
+}
+
+#[tokio::test]
+async fn robots_meta_renders_the_directives_and_sets_the_conflicting_header() {
+    // Build request
+    let request = Request::builder()
+        .uri("/robots/meta?directives=index&x_robots_tag=noindex")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify the conflicting header
+    assert_eq!(response.headers().get("x-robots-tag").unwrap(), "noindex");
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#"<meta name="robots" content="index">"#));
+}
+
+#[tokio::test]
 async fn canonical_renders_a_self_referential_link_by_default() {
     // Build request
     let request = Request::builder()

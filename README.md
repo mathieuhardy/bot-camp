@@ -145,11 +145,11 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 **Difficulté : faible à moyenne.** Nécessite de générer du HTML dynamique proprement — bon moment pour choisir et mettre en place le moteur de templates que tu garderas pour tout le reste.
 
 ### Phase 3 — Robots.txt & meta robots
-- Génération dynamique de `/robots.txt` depuis la config
-- Meta robots + X-Robots-Tag, avec les cas de conflit
-- Lien entre scénarios et règles robots.txt (un scénario "bloqué" doit automatiquement apparaître dans le disallow généré)
+- [x] `/robots.txt` servi depuis un état en mémoire (`PUT /robots.txt` pour le configurer, texte brut, puisqu'un crawler le fetch toujours sans query string) plutôt que depuis un fichier de config — voir la note ci-dessous
+- [x] Meta robots + X-Robots-Tag, avec les cas de conflit (`/robots/meta?directives=...&x_robots_tag=...`)
+- [ ] Lien entre scénarios et règles robots.txt (un scénario "bloqué" doit automatiquement apparaître dans le disallow généré) — reporté : dépend du moteur de scénarios déclaratifs (section 1), qui n'existe pas encore
 
-**Difficulté : moyenne.** La partie non triviale, c'est de garder `/robots.txt` et les pages **cohérents entre eux** sans dupliquer la config à deux endroits — d'où l'intérêt du moteur de scénarios déclaratifs introduit en section 1.
+**Difficulté : moyenne.** La partie non triviale, c'est de garder `/robots.txt` et les pages **cohérents entre eux** sans dupliquer la config à deux endroits — d'où l'intérêt du moteur de scénarios déclaratifs introduit en section 1. Pour cette phase, on a choisi un état mutable en mémoire plutôt qu'un fichier YAML/TOML chargé au démarrage : plus simple, pas de nouvelle dépendance de parsing, et suffisant tant que le moteur de scénarios n'est pas là. Le lien automatique scénario ↔ robots.txt attendra ce moteur.
 
 ### Phase 4 — Rate limiting simple, en mémoire
 - Middleware Tower qui limite par IP/UA avec un stockage in-memory (`dashmap` ou `moka`)

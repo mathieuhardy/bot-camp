@@ -6,6 +6,7 @@
 
 mod error;
 mod routes;
+mod state;
 mod templates;
 
 use axum::Router;
@@ -15,6 +16,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 pub use crate::error::{Error, Result};
+use crate::state::AppState;
 
 /// Creates the application router with all routes and middleware.
 ///
@@ -35,7 +37,13 @@ pub fn app() -> Router {
         .route("/redirect/meta-refresh", get(routes::redirect_meta_refresh))
         .route("/redirect/refresh", get(routes::redirect_refresh))
         .route("/redirect/{code}", get(routes::redirect))
+        .route(
+            "/robots.txt",
+            get(routes::robots_txt).put(routes::set_robots_txt),
+        )
+        .route("/robots/meta", get(routes::robots_meta))
         .route("/status/{code}", get(routes::status))
+        .with_state(AppState::default())
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())

@@ -14,6 +14,10 @@
         {% if refresh %}
         <meta http-equiv="refresh" content="{{ refresh }}">
         {% endif %}
+
+        {% for content in meta_robots %}
+        <meta name="robots" content="{{ content }}">
+        {% endfor %}
     </head>
 
     <body>
