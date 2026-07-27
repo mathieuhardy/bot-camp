@@ -25,9 +25,11 @@ use crate::state::AppState;
 pub fn app() -> Router {
     Router::new()
         .route("/auth/basic", get(routes::basic))
+        .route("/broken-html", get(routes::broken_html))
         .route("/canonical", get(routes::canonical))
         .route("/content", get(routes::content))
         .route("/delay/{ms}", get(routes::delay))
+        .route("/encoding", get(routes::encoding))
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))
         .route("/health", get(routes::health))

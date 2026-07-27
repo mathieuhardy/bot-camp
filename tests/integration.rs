@@ -604,6 +604,69 @@ async fn js_render_embeds_the_requested_injections_in_a_deferred_script() {
 }
 
 #[tokio::test]
+async fn encoding_declares_the_requested_content_type_charset() {
+    // Build request: header says iso-8859-1, meta tag says utf-8
+    let request = Request::builder()
+        .uri("/encoding?content_type_charset=iso-8859-1&meta_charset=utf-8")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify the mismatched charset declarations
+    assert_eq!(
+        response.headers().get("content-type").unwrap(),
+        "text/html; charset=iso-8859-1"
+    );
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#"<meta charset="utf-8">"#));
+}
+
+#[tokio::test]
+async fn encoding_double_encodes_the_body_when_requested() {
+    // Build request
+    let request = Request::builder()
+        .uri("/encoding?text=a%26b&double_encode=true")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify the ampersand was HTML-entity-encoded twice
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("a&amp;amp;b"));
+}
+
+#[tokio::test]
+async fn broken_html_splices_raw_markup_into_head_and_body() {
+    // Build request
+    let request = Request::builder()
+        .uri("/broken-html?head=%3Cp%3Ebad%3C%2Fp%3E&body=%3Clink+rel%3D%22x%22%3E")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify both raw snippets were spliced in, unescaped
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    let head_end = body.find("</head>").unwrap();
+    assert!(body[..head_end].contains("<p>bad</p>"));
+    assert!(body[head_end..].contains(r#"<link rel="x">"#));
+}
+
+#[tokio::test]
 async fn canonical_renders_a_self_referential_link_by_default() {
     // Build request
     let request = Request::builder()

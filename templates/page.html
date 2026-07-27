@@ -1,6 +1,10 @@
 <!doctype html>
 <html>
     <head>
+        {% if charset %}
+        <meta charset="{{ charset }}">
+        {% endif %}
+
         {% for title in titles %}
         <title>{{ title }}</title>
         {% endfor %}
@@ -20,6 +24,10 @@
         {% for content in meta_robots %}
         <meta name="robots" content="{{ content }}">
         {% endfor %}
+
+        {% if raw_head %}
+        {{ raw_head }}
+        {% endif %}
     </head>
 
     <body>
@@ -38,6 +46,10 @@
         <script>
         {{ deferred_script }}
         </script>
+        {% endif %}
+
+        {% if raw_body %}
+        {{ raw_body }}
         {% endif %}
     </body>
 </html>

@@ -1,9 +1,11 @@
 //! HTTP route handlers for the bot-camp server.
 
 mod auth;
+mod broken_html;
 mod canonical;
 mod content;
 mod delay;
+mod encoding;
 mod headers;
 mod health;
 mod js_render;
@@ -14,9 +16,11 @@ mod robots;
 mod status;
 
 pub use auth::basic;
+pub use broken_html::broken_html;
 pub use canonical::canonical;
 pub use content::content;
 pub use delay::delay;
+pub use encoding::encoding;
 pub use headers::echo;
 pub use headers::set;
 pub use health::health;

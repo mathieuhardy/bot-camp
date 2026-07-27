@@ -160,7 +160,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ### Phase 5 — Contenu HTML avancé & JS
 - [x] H1/titres/word count/duplicate content (`/content?title=...&h1=...&word_count=...&body=...` — titre manquant/vide/dupliqué, H1 manquant/dupliqué, nombre de mots exact, contenu dupliqué en rappelant la route avec le même `body` depuis deux URLs). Reporté pour plus tard : H1 en image/SVG, mots avec nombres/tirets/symboles/scripts inclus dans le comptage
 - [x] Rendu JS différé (`/js-render?text=...&title=...&canonical=...&meta_name=...&meta_content=...&delay_ms=...` — le HTML initial ne contient aucun de ces signaux, un `<script>` les injecte dans le DOM après le délai). Reporté pour plus tard : AJAX qui remplit la page, `alert()`/dialog bloquant, script analytics/pub
-- [ ] Encodage multi-langues, HTML cassé volontairement
+- [x] Encodage multi-langues, HTML cassé volontairement (`/encoding?content_type_charset=...&meta_charset=...&double_encode=...` — charset du header et du `<meta charset>` indépendants l'un de l'autre, texte par défaut mélangeant accents/CJK/`&`, double encodage HTML ; `/broken-html?head=...&body=...` — markup brut non échappé splicé dans `<head>`/`<body>`, pour construire n'importe quel HTML cassé). Reporté pour plus tard : mismatch d'encodage au niveau des octets réels (nécessiterait `encoding_rs`), variante `http-equiv` du charset
 
 **Difficulté : moyenne.** Rien de conceptuellement dur, mais beaucoup de cas particuliers à couvrir proprement (c'est là que la liste de scénarios déclaratifs grossit vraiment).
 

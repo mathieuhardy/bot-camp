@@ -51,6 +51,47 @@ content-length: 0
 
 ```
 
+## `GET /broken-html`
+
+Returns an HTML page with `head`/`body` markup spliced in verbatim, **not
+HTML-escaped** — construct any malformed markup you want to test: an
+unclosed tag inside `<head>`, a non-head element misplaced in `<head>`,
+a `<link>` inside `<body>`, or anything else a real parser would need to
+recover from.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `head` | query, string | Optional. Raw markup inserted verbatim into `<head>`. |
+| `body` | query, string | Optional. Raw markup inserted verbatim into `<body>`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -s -G "http://localhost:3000/broken-html" \
+  --data-urlencode "head=<p>not valid in head</p>" \
+  --data-urlencode "body=<link rel=stylesheet href=/x.css>"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+<p>not valid in head</p>
+</head>
+<body>
+<link rel=stylesheet href=/x.css>
+</body>
+</html>
+```
+
 ## `GET /canonical`
 
 Returns an HTML page carrying a `<link rel="canonical">` tag, to test how
@@ -194,6 +235,66 @@ curl -i http://localhost:3000/delay/20
 HTTP/1.1 200 OK
 content-length: 0
 
+```
+
+## `GET /encoding`
+
+Returns an HTML page whose declared charsets — the `Content-Type`
+response header and the `<meta charset>` tag — are independently
+controllable, and whose body text can be HTML-entity-encoded twice
+instead of once. Useful to test how a crawler handles a mismatch between
+declared and actual encoding, and the classic double-encoding bug (e.g.
+`&` rendering as literal `&amp;` text instead of `&`).
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `text` | query, string | Optional. The page's body text. Defaults to a string mixing accented Latin characters, CJK characters, and an ampersand (`Café & Résumé 日本語`), to exercise multi-lingual content and double-encoding at once. |
+| `content_type_charset` | query, string | Optional, defaults to `utf-8`. Charset declared in the `Content-Type` response header. |
+| `meta_charset` | query, string | Optional. Charset declared in a `<meta charset>` tag, independent of `content_type_charset` — set both to different values to test a header/meta mismatch. |
+| `double_encode` | query, bool | Optional, defaults to `false`. HTML-entity-encodes `text` twice instead of once. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page, with `Content-Type: text/html; charset={content_type_charset}` | Always — the handler cannot fail. |
+
+**Examples**
+
+```sh
+curl -i "http://localhost:3000/encoding?content_type_charset=iso-8859-1&meta_charset=utf-8"
+```
+
+```
+HTTP/1.1 200 OK
+content-type: text/html; charset=iso-8859-1
+
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+<body>
+Café &amp; Résumé 日本語
+</body>
+</html>
+```
+
+```sh
+curl -s "http://localhost:3000/encoding?text=a%26b&double_encode=true"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+a&amp;amp;b
+</body>
+</html>
 ```
 
 ## `GET /headers/echo`

@@ -9,7 +9,8 @@ const TEMPLATE_NAME: &str = "page.html";
 
 /// The shared HTML page skeleton: a title, zero or more canonical links
 /// (in the head and/or the body), an optional `og:url` meta tag, an
-/// optional meta-refresh tag, a body, and an optional deferred script.
+/// optional meta-refresh tag, a body, an optional deferred script, an
+/// optional charset meta tag, and raw markup spliced into the head/body.
 const TEMPLATE_SOURCE: &str = include_str!("../templates/page.html");
 
 /// Values interpolated into the shared page skeleton.
@@ -48,6 +49,17 @@ pub(crate) struct PageContext {
     /// a `<script>` tag, alongside an empty `#js-content` element for
     /// that script to populate.
     pub(crate) deferred_script: Option<String>,
+
+    /// `<meta charset>` value, if any.
+    pub(crate) charset: Option<String>,
+
+    /// Raw markup inserted verbatim (not HTML-escaped) into `<head>`,
+    /// to construct deliberately malformed HTML.
+    pub(crate) raw_head: Option<String>,
+
+    /// Raw markup inserted verbatim (not HTML-escaped) into `<body>`,
+    /// to construct deliberately malformed HTML.
+    pub(crate) raw_body: Option<String>,
 }
 
 /// Renders the shared HTML skeleton with `context`, HTML-escaping every
@@ -79,6 +91,9 @@ pub(crate) fn render_page(context: PageContext) -> String {
         h1: context.h1.iter().map(|s| escape_html(s)).collect(),
         body: escape_html(&context.body),
         deferred_script: context.deferred_script,
+        charset: context.charset.as_deref().map(escape_html),
+        raw_head: context.raw_head,
+        raw_body: context.raw_body,
     };
 
     let mut env = Environment::new();
@@ -94,7 +109,7 @@ pub(crate) fn render_page(context: PageContext) -> String {
 
 /// Escapes the five characters that are unsafe to interpolate into HTML
 /// text or a quoted attribute value: `&`, `<`, `>`, `"`, `'`.
-fn escape_html(value: &str) -> String {
+pub(crate) fn escape_html(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
