@@ -32,5 +32,12 @@
         {% for href in canonical_in_body %}
         <link rel="canonical" href="{{ href }}">
         {% endfor %}
+
+        {% if deferred_script %}
+        <div id="js-content"></div>
+        <script>
+        {{ deferred_script }}
+        </script>
+        {% endif %}
     </body>
 </html>

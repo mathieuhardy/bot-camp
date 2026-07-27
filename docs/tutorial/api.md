@@ -296,6 +296,51 @@ content-length: 0
 
 ```
 
+## `GET /js-render`
+
+Returns an HTML page whose initial, server-rendered markup carries none
+of `text`, `title`, `canonical`, or the `meta_name`/`meta_content` pair —
+each is injected into the DOM via JavaScript after `delay_ms` instead.
+Useful to check whether a crawler executes JavaScript before extracting
+these signals, or only sees the initial HTML.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `text` | query, string | Optional. Text injected into the page body after `delay_ms`. |
+| `title` | query, string | Optional. `document.title` set after `delay_ms`. |
+| `canonical` | query, string | Optional. `<link rel="canonical">` href injected into `<head>` after `delay_ms`. |
+| `meta_name` | query, string | Optional. `<meta>` tag name injected into `<head>` after `delay_ms`. Only injected if `meta_content` is also given. |
+| `meta_content` | query, string | Optional. `<meta>` tag content, paired with `meta_name`. |
+| `delay_ms` | query, `u64` | Optional, defaults to `0`. Delay before the JavaScript mutates the page. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -s "http://localhost:3000/js-render?text=Hello&title=Injected&canonical=/page&delay_ms=800"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+<div id="js-content"></div>
+<script>
+setTimeout(function() { document.getElementById('js-content').textContent = "Hello"; document.title = "Injected"; var link = document.createElement('link'); link.rel = 'canonical'; link.href = "/page"; document.head.appendChild(link); }, 800);
+</script>
+</body>
+</html>
+```
+
 ## `GET /large-response/{kb}`
 
 Returns a response body of a controlled size, to test how a crawler

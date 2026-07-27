@@ -563,6 +563,47 @@ async fn content_can_serve_the_same_body_from_two_different_urls() {
 }
 
 #[tokio::test]
+async fn js_render_omits_every_signal_from_the_initial_html() {
+    // Build request
+    let request = Request::builder()
+        .uri("/js-render?text=hello&title=Injected&canonical=/page&delay_ms=500")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify the initial HTML carries none of the injected signals
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(!body.contains("<title>"));
+    assert!(!body.contains(r#"rel="canonical""#));
+}
+
+#[tokio::test]
+async fn js_render_embeds_the_requested_injections_in_a_deferred_script() {
+    // Build request
+    let request = Request::builder()
+        .uri("/js-render?text=hello&title=Injected&canonical=/page&delay_ms=500")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("document.getElementById('js-content').textContent = \"hello\";"));
+    assert!(body.contains("document.title = \"Injected\";"));
+    assert!(body.contains("link.href = \"/page\";"));
+    assert!(body.contains("}, 500);"));
+}
+
+#[tokio::test]
 async fn canonical_renders_a_self_referential_link_by_default() {
     // Build request
     let request = Request::builder()

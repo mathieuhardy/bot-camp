@@ -31,6 +31,7 @@ pub fn app() -> Router {
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))
         .route("/health", get(routes::health))
+        .route("/js-render", get(routes::js_render))
         .route("/large-response/{kb}", get(routes::large_response))
         .route("/normalize", get(routes::normalize))
         .route("/redirect/chain", get(routes::redirect_chain))

@@ -9,7 +9,7 @@ const TEMPLATE_NAME: &str = "page.html";
 
 /// The shared HTML page skeleton: a title, zero or more canonical links
 /// (in the head and/or the body), an optional `og:url` meta tag, an
-/// optional meta-refresh tag, and a body.
+/// optional meta-refresh tag, a body, and an optional deferred script.
 const TEMPLATE_SOURCE: &str = include_str!("../templates/page.html");
 
 /// Values interpolated into the shared page skeleton.
@@ -42,6 +42,12 @@ pub(crate) struct PageContext {
 
     /// Body text.
     pub(crate) body: String,
+
+    /// JavaScript statements to run, inserted verbatim (not
+    /// HTML-escaped, since it's JS source rather than HTML text) inside
+    /// a `<script>` tag, alongside an empty `#js-content` element for
+    /// that script to populate.
+    pub(crate) deferred_script: Option<String>,
 }
 
 /// Renders the shared HTML skeleton with `context`, HTML-escaping every
@@ -72,6 +78,7 @@ pub(crate) fn render_page(context: PageContext) -> String {
         meta_robots: context.meta_robots.iter().map(|s| escape_html(s)).collect(),
         h1: context.h1.iter().map(|s| escape_html(s)).collect(),
         body: escape_html(&context.body),
+        deferred_script: context.deferred_script,
     };
 
     let mut env = Environment::new();
