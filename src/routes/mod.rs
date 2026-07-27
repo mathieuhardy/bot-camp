@@ -6,6 +6,7 @@ mod delay;
 mod headers;
 mod health;
 mod large_response;
+mod normalize;
 mod redirect;
 mod status;
 
@@ -16,6 +17,7 @@ pub use headers::echo;
 pub use headers::set;
 pub use health::health;
 pub use large_response::large_response;
+pub use normalize::normalize;
 pub use redirect::redirect;
 pub use redirect::redirect_chain;
 pub use redirect::redirect_loop;

@@ -140,7 +140,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 - [x] Header Refresh (`/redirect/refresh`)
 - [x] Meta refresh (`/redirect/meta-refresh`) — moteur de templates : MiniJinja
 - [x] Canonical tag (`/canonical` : self-référentiel/cross-page, relative/absolue, dupliqué, hors `<head>`, conflit `og:url`)
-- [] Cas de normalisation d'URL (casse, trailing slash, ordre des params) — déjà testable via `/canonical?to=...` en choisissant la valeur de `to`, pas d'endpoint dédié nécessaire
+- [x] Cas de normalisation d'URL (`/normalize?url=...` : redirige en 301 vers la forme normalisée — casse du scheme/host, port par défaut, dot-segments, trailing slash, dots du host, ordre des query params, fragment — chaque règle optionnelle togglable via query param)
 
 **Difficulté : faible à moyenne.** Nécessite de générer du HTML dynamique proprement — bon moment pour choisir et mettre en place le moteur de templates que tu garderas pour tout le reste.
 

@@ -163,7 +163,7 @@ fn redirect_status(code: u16) -> Result<StatusCode> {
 }
 
 /// Builds a `Location` header pointing at `to`.
-fn location_header(to: &str) -> Result<HeaderMap> {
+pub(crate) fn location_header(to: &str) -> Result<HeaderMap> {
     let mut headers = HeaderMap::new();
     headers.insert(LOCATION, HeaderValue::from_str(to)?);
 

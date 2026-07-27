@@ -349,6 +349,77 @@ async fn redirect_meta_refresh_embeds_the_expected_tag() {
 }
 
 #[tokio::test]
+async fn normalize_redirects_to_the_normalized_form() {
+    // Build request
+    let request = Request::builder()
+        .uri("/normalize?url=HTTP://ExAmPle.COM:80/a/./b/../c/?d=2%26c=1%23frag")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::MOVED_PERMANENTLY);
+
+    // Verify the location points at the fully normalized URL
+    assert_eq!(
+        response.headers().get("location").unwrap(),
+        "http://example.com/a/c?c=1&d=2"
+    );
+}
+
+#[tokio::test]
+async fn normalize_returns_ok_when_the_url_is_already_normalized() {
+    // Build request
+    let request = Request::builder()
+        .uri("/normalize?url=http://example.com/path")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify no redirect was issued
+    assert!(response.headers().get("location").is_none());
+}
+
+#[tokio::test]
+async fn normalize_can_disable_query_sorting() {
+    // Build request: already normalized except for query order, and
+    // sort_query is turned off, so nothing should change
+    let request = Request::builder()
+        .uri("/normalize?url=http://example.com/path?c=3%26a=1%26b=2&sort_query=false")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify no redirect was issued
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.headers().get("location").is_none());
+}
+
+#[tokio::test]
+async fn normalize_rejects_an_unparseable_url() {
+    // Build request
+    let request = Request::builder()
+        .uri("/normalize?url=not+a+url")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn canonical_renders_a_self_referential_link_by_default() {
     // Build request
     let request = Request::builder()

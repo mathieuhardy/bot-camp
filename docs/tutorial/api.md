@@ -270,6 +270,63 @@ content-length: 1024
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...
 ```
 
+## `GET /normalize`
+
+Normalizes a URL and redirects to the result — the way a real server
+canonicalizes a URL (lowercasing the host, dropping a trailing slash,
+etc.) via a plain `3xx` — so a crawler exercises its normal
+redirect-following path instead of having to parse a bespoke response
+format. Useful to check whether a crawler's own normalization agrees
+with this reference implementation.
+
+Scheme, host case, default port (`:80`/`:443`), and path dot-segments
+(`.`, `..`) are always normalized — that's inherent to URL parsing and
+can't be turned off. The remaining rules are each togglable
+independently, so you can inspect what a single rule changes in
+isolation. Path segments and query keys/values keep their case unchanged
+either way, since case sensitivity there is meaningful.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `url` | query, string | The URL to normalize. Must be absolute (a scheme and host are required). |
+| `remove_host_dots` | query, bool | Optional, defaults to `true`. Collapses leading, trailing, and duplicated dots in the host (`example.com..` -> `example.com`). |
+| `remove_trailing_slash` | query, bool | Optional, defaults to `true`. Strips a single trailing slash from the path, unless the path is just `/`. |
+| `sort_query` | query, bool | Optional, defaults to `true`. Sorts query parameters alphabetically. |
+| `remove_fragment` | query, bool | Optional, defaults to `true`. Drops the fragment (`#...`) entirely. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `301 Moved Permanently` | *(empty)*, with a `Location` header pointing at the normalized URL | The normalized URL differs from `url`. |
+| `200 OK` | *(empty)* | `url` was already fully normalized — nothing to redirect to. |
+| `400 Bad Request` | Error message | `url` doesn't parse as a URL. |
+
+**Examples**
+
+```sh
+curl -i "http://localhost:3000/normalize?url=HTTP://ExAmPle.COM:80/a/./b/../c/?d=2&c=1#frag"
+```
+
+```
+HTTP/1.1 301 Moved Permanently
+location: http://example.com/a/c?c=1&d=2
+content-length: 0
+
+```
+
+```sh
+curl -i "http://localhost:3000/normalize?url=http://example.com/path?c=3&a=1&b=2&sort_query=false"
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
 ## `GET /redirect/{code}`
 
 Redirects to an arbitrary URL with a given redirect status code. Useful

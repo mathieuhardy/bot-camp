@@ -31,6 +31,10 @@ pub enum Error {
     #[error(transparent)]
     InvalidStatusCode(#[from] axum::http::status::InvalidStatusCode),
 
+    /// The requested value isn't a valid URL.
+    #[error(transparent)]
+    InvalidUrl(#[from] url::ParseError),
+
     /// I/O error.
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -44,6 +48,7 @@ impl IntoResponse for Error {
             Error::InvalidRedirectCode(_) => StatusCode::BAD_REQUEST,
             Error::InvalidRedirectSteps(_) => StatusCode::BAD_REQUEST,
             Error::InvalidStatusCode(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidUrl(_) => StatusCode::BAD_REQUEST,
             Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
