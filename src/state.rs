@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+use crate::rate_limit::RateLimitState;
+
 /// Content served by `GET /robots.txt` until it's overridden via
 /// `PUT /robots.txt`.
 const DEFAULT_ROBOTS_TXT: &str = "User-agent: *\nAllow: /\n";
@@ -14,12 +16,16 @@ const DEFAULT_ROBOTS_TXT: &str = "User-agent: *\nAllow: /\n";
 pub(crate) struct AppState {
     /// The current contents served by `GET /robots.txt`.
     pub(crate) robots_txt: Arc<RwLock<String>>,
+
+    /// Rate limiting configuration and per-key counters.
+    pub(crate) rate_limit: Arc<RateLimitState>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         AppState {
             robots_txt: Arc::new(RwLock::new(DEFAULT_ROBOTS_TXT.to_string())),
+            rate_limit: Arc::new(RateLimitState::default()),
         }
     }
 }

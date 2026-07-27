@@ -151,11 +151,13 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 **Difficulté : moyenne.** La partie non triviale, c'est de garder `/robots.txt` et les pages **cohérents entre eux** sans dupliquer la config à deux endroits — d'où l'intérêt du moteur de scénarios déclaratifs introduit en section 1. Pour cette phase, on a choisi un état mutable en mémoire plutôt qu'un fichier YAML/TOML chargé au démarrage : plus simple, pas de nouvelle dépendance de parsing, et suffisant tant que le moteur de scénarios n'est pas là. Le lien automatique scénario ↔ robots.txt attendra ce moteur.
 
 ### Phase 4 — Rate limiting simple, en mémoire
-- [ ] Middleware Tower qui limite par IP/UA avec un stockage in-memory (`dashmap` ou `moka`)
-- [ ] 429 + `Retry-After`, ban temporaire simple
-- [ ] Endpoint `/ratelimit/status` pour introspection
+- [x] Middleware Tower (`axum::middleware::from_fn_with_state`) qui limite par IP/UA/les deux, stockage in-memory (`dashmap`) — appliqué uniquement au sous-arbre `/ratelimit/{*path}`, aucune route existante affectée
+- [x] Algorithmes configurables à chaud via `PUT /ratelimit/config` (JSON) : token bucket, fixed window, sliding window (approximé par comptage pondéré à deux fenêtres, pas de log de timestamps)
+- [x] 429 + `Retry-After` sur dépassement de l'algorithme ; ban à deux étages — après `ban_threshold` violations consécutives (configurable), `403` + `Retry-After` pendant `ban_duration_ms` (configurable), indépendamment de l'algorithme
+- [x] `POST /ratelimit/reset` (vide les compteurs sans changer la config) et `GET /ratelimit/status` (introspection : clé, ban en cours, TTL) — ces deux endpoints, plus `/ratelimit/config`, ne sont jamais eux-mêmes soumis au rate limit
+- [ ] Allow-list / block-list explicite d'IP/UA — reporté
 
-**Difficulté : moyenne.** Le piège classique ici est l'extraction fiable de l'IP client (proxy, `X-Forwarded-For`, `Forwarded`) — à traiter proprement dès le début plutôt que de le patcher plus tard.
+**Difficulté : moyenne.** Le piège classique ici est l'extraction fiable de l'IP client (proxy, `X-Forwarded-For`, `Forwarded`) — traité via `X-Forwarded-For` (premier hop) avec repli sur l'adresse TCP réelle (`ConnectInfo`, donc `main.rs` sert désormais via `into_make_service_with_connect_info`).
 
 ### Phase 5 — Contenu HTML avancé & JS
 - [x] H1/titres/word count/duplicate content (`/content?title=...&h1=...&word_count=...&body=...` — titre manquant/vide/dupliqué, H1 manquant/dupliqué, nombre de mots exact, contenu dupliqué en rappelant la route avec le même `body` depuis deux URLs). Reporté pour plus tard : H1 en image/SVG, mots avec nombres/tirets/symboles/scripts inclus dans le comptage

@@ -530,6 +530,140 @@ content-length: 0
 
 ```
 
+## `GET /ratelimit/{*path}`
+
+The rate-limited playground. Every path under `/ratelimit/` shares the
+same rate limiting state, so you can simulate crawling several pages of
+a site while a single policy governs all of them. This is the **only**
+route gated by the rate limiter — every other route in bot-camp (the
+ones documented elsewhere in this file) is entirely unaffected,
+regardless of how the limiter is configured.
+
+Gated by whichever policy is currently set via `PUT /ratelimit/config`
+(a token bucket with capacity `10` and a refill rate of `1`/sec by
+default). Each request is first judged by that algorithm; a client that
+racks up `ban_threshold` consecutive violations is temporarily banned
+for `ban_duration_ms`, independently of what the algorithm says in the
+meantime.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `path` | path, string | Anything — the value itself has no effect on the response. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | `ok: /ratelimit/{path}` | The request is allowed by the current policy. |
+| `429 Too Many Requests` | *(empty)*, with a `Retry-After` header (seconds) | The configured algorithm's rate is exceeded. |
+| `403 Forbidden` | *(empty)*, with a `Retry-After` header (seconds) | The key has reached `ban_threshold` consecutive violations and is temporarily banned. |
+
+**Example**
+
+```sh
+for i in $(seq 1 12); do curl -s -o /dev/null -w "%{http_code} " "http://localhost:3000/ratelimit/page$i"; done
+```
+
+```
+200 200 200 200 200 200 200 200 200 200 429 429
+```
+
+## `PUT /ratelimit/config`
+
+Replaces the current rate limiting policy and clears every key's
+counters and bans — old state doesn't carry meaning under a new
+algorithm. Never itself rate-limited, so you can always reconfigure even
+while banned.
+
+**Request**
+
+Body: JSON object.
+
+| Field | Type | Description |
+|---|---|---|
+| `algorithm` | string | `token_bucket`, `fixed_window`, or `sliding_window`. |
+| ...algorithm fields | — | `token_bucket`: `capacity` (`u32`), `refill_per_sec` (float). `fixed_window`/`sliding_window`: `limit` (`u32`), `window_ms` (`u64`). |
+| `key_strategy` | string | `ip`, `user_agent`, or `both` — how a client is identified. `ip` trusts `X-Forwarded-For`'s first value if present, falling back to the real peer address. |
+| `ban_threshold` | `u32` | Consecutive violations before a temporary ban. |
+| `ban_duration_ms` | `u64` | Ban duration, in milliseconds, once `ban_threshold` is reached. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | The new policy is in effect. |
+
+**Example**
+
+```sh
+curl -i -X PUT "http://localhost:3000/ratelimit/config" \
+  -H "content-type: application/json" \
+  -d '{"algorithm":"fixed_window","limit":3,"window_ms":2000,"key_strategy":"both","ban_threshold":2,"ban_duration_ms":500}'
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
+## `POST /ratelimit/reset`
+
+Clears every key's counters and bans without changing the current
+policy — use it to start a fresh test run. Never itself rate-limited.
+
+**Request**
+
+No parameters, no body.
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -i -X POST "http://localhost:3000/ratelimit/reset"
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
+## `GET /ratelimit/status`
+
+Introspection for a rate limiting key — handy to check your own quota
+and ban state while developing a crawler against `/ratelimit/{*path}`.
+Never itself rate-limited.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `key` | query, string | Optional. The key to inspect. Defaults to the caller's own key, computed with the currently configured `key_strategy`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | JSON: `{"key": "...", "banned": bool, "retry_after_secs": number \| null}` | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -s "http://localhost:3000/ratelimit/status"
+```
+
+```json
+{"key": "127.0.0.1", "banned": false, "retry_after_secs": null}
+```
+
 ## `GET /redirect/{code}`
 
 Redirects to an arbitrary URL with a given redirect status code. Useful

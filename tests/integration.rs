@@ -1,14 +1,27 @@
 //! Integration tests for the bot-camp server.
 
+use std::net::SocketAddr;
 use std::time::Instant;
 
 use axum::body::Body;
+use axum::extract::ConnectInfo;
 use axum::http::Request;
 use axum::http::StatusCode;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 use bot_camp::app;
+
+/// Builds a request carrying a `ConnectInfo<SocketAddr>` extension, the
+/// way axum's real connection-serving layer would — needed for any
+/// route reached through the rate limiting middleware, since it keys on
+/// the peer address.
+fn request_from(peer: &str, uri: &str) -> Request<Body> {
+    let mut request = Request::builder().uri(uri).body(Body::empty()).unwrap();
+    let addr: SocketAddr = peer.parse().unwrap();
+    request.extensions_mut().insert(ConnectInfo(addr));
+    request
+}
 
 #[tokio::test]
 async fn auth_basic_accepts_the_expected_credentials() {
@@ -664,6 +677,248 @@ async fn broken_html_splices_raw_markup_into_head_and_body() {
     let head_end = body.find("</head>").unwrap();
     assert!(body[..head_end].contains("<p>bad</p>"));
     assert!(body[head_end..].contains(r#"<link rel="x">"#));
+}
+
+/// Configures the rate limiter with a token bucket of `capacity` and a
+/// negligible refill rate, so a second request from the same key is
+/// reliably limited without depending on real timing.
+fn configure_request(capacity: u32, ban_threshold: u32, key_strategy: &str) -> Request<Body> {
+    let body = format!(
+        r#"{{"algorithm":"token_bucket","capacity":{capacity},"refill_per_sec":0.0001,
+            "key_strategy":"{key_strategy}","ban_threshold":{ban_threshold},"ban_duration_ms":100}}"#
+    );
+
+    Request::builder()
+        .method("PUT")
+        .uri("/ratelimit/config")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn ratelimit_allows_requests_within_capacity_and_limits_beyond_it() {
+    let router = app();
+
+    let configure = router
+        .clone()
+        .oneshot(configure_request(1, 10, "ip"))
+        .await
+        .unwrap();
+    assert_eq!(configure.status(), StatusCode::OK);
+
+    let first = router
+        .clone()
+        .oneshot(request_from("203.0.113.1:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = router
+        .oneshot(request_from("203.0.113.1:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(second.headers().get("retry-after").is_some());
+}
+
+#[tokio::test]
+async fn ratelimit_bans_after_reaching_the_violation_threshold() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 1, "ip"))
+        .await
+        .unwrap();
+
+    // First request consumes the only token; second violates the limit
+    // and immediately reaches the ban threshold of 1
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.2:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.2:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+
+    let banned = router
+        .oneshot(request_from("203.0.113.2:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(banned.status(), StatusCode::FORBIDDEN);
+    assert!(banned.headers().get("retry-after").is_some());
+}
+
+#[tokio::test]
+async fn ratelimit_reset_clears_counters() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 10, "ip"))
+        .await
+        .unwrap();
+
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.3:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    let limited = router
+        .clone()
+        .oneshot(request_from("203.0.113.3:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(limited.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let reset_request = Request::builder()
+        .method("POST")
+        .uri("/ratelimit/reset")
+        .body(Body::empty())
+        .unwrap();
+    let reset_response = router.clone().oneshot(reset_request).await.unwrap();
+    assert_eq!(reset_response.status(), StatusCode::OK);
+
+    let allowed_again = router
+        .oneshot(request_from("203.0.113.3:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(allowed_again.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn ratelimit_admin_endpoints_stay_reachable_while_banned() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 1, "ip"))
+        .await
+        .unwrap();
+
+    // Exhaust the quota and reach the ban
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.4:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.4:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    let banned = router
+        .clone()
+        .oneshot(request_from("203.0.113.4:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(banned.status(), StatusCode::FORBIDDEN);
+
+    // The admin endpoints are never gated by the same limiter
+    let status_request = request_from("203.0.113.4:1", "/ratelimit/status");
+    let status_response = router.clone().oneshot(status_request).await.unwrap();
+    assert_eq!(status_response.status(), StatusCode::OK);
+
+    let reset_request = Request::builder()
+        .method("POST")
+        .uri("/ratelimit/reset")
+        .body(Body::empty())
+        .unwrap();
+    let reset_response = router.oneshot(reset_request).await.unwrap();
+    assert_eq!(reset_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn ratelimit_does_not_affect_pre_existing_routes() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 1, "ip"))
+        .await
+        .unwrap();
+
+    // Exhaust the quota and reach the ban on the playground
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.5:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.5:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.5:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+
+    // An unrelated, pre-existing route from the same peer is unaffected
+    let request = request_from("203.0.113.5:1", "/status/200");
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn ratelimit_status_reports_the_ban_state() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 1, "ip"))
+        .await
+        .unwrap();
+
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.6:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.6:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+
+    let status_request = request_from("203.0.113.6:1", "/ratelimit/status");
+    let response = router.oneshot(status_request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#""banned":true"#));
+}
+
+#[tokio::test]
+async fn ratelimit_can_key_by_user_agent_instead_of_ip() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 10, "user_agent"))
+        .await
+        .unwrap();
+
+    // Same User-Agent, different peer IPs: still share one quota
+    let mut first = request_from("203.0.113.7:1", "/ratelimit/page");
+    first
+        .headers_mut()
+        .insert("user-agent", "shared-bot".parse().unwrap());
+    let first_response = router.clone().oneshot(first).await.unwrap();
+    assert_eq!(first_response.status(), StatusCode::OK);
+
+    let mut second = request_from("203.0.113.8:1", "/ratelimit/page");
+    second
+        .headers_mut()
+        .insert("user-agent", "shared-bot".parse().unwrap());
+    let second_response = router.oneshot(second).await.unwrap();
+    assert_eq!(second_response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
 #[tokio::test]
