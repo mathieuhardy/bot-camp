@@ -44,7 +44,7 @@ pub async fn canonical(Query(params): Query<CanonicalParams>) -> Html<String> {
     };
 
     let context = PageContext {
-        title: "Canonical".to_string(),
+        titles: vec!["Canonical".to_string()],
         canonical_in_head: if params.in_body {
             Vec::new()
         } else {

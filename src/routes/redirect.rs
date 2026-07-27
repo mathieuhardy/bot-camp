@@ -137,7 +137,7 @@ pub async fn redirect_refresh(Query(params): Query<RefreshParams>) -> Result<Hea
 /// `<meta http-equiv="refresh" content="delay; url=to">`.
 pub async fn redirect_meta_refresh(Query(params): Query<RefreshParams>) -> Html<String> {
     let context = PageContext {
-        title: "Meta refresh".to_string(),
+        titles: vec!["Meta refresh".to_string()],
         refresh: Some(refresh_content(&params)),
         body: "Redirecting…".to_string(),
         ..Default::default()

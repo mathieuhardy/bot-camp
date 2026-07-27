@@ -2,6 +2,7 @@
 
 mod auth;
 mod canonical;
+mod content;
 mod delay;
 mod headers;
 mod health;
@@ -13,6 +14,7 @@ mod status;
 
 pub use auth::basic;
 pub use canonical::canonical;
+pub use content::content;
 pub use delay::delay;
 pub use headers::echo;
 pub use headers::set;

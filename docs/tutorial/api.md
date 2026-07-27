@@ -111,6 +111,63 @@ Canonical tag test page.
 </html>
 ```
 
+## `GET /content`
+
+Returns an HTML page with controllable `<title>`, `<h1>`, and body
+content, to test the classic on-page signals a crawler extracts: a
+missing, empty, or duplicated title; a missing or duplicated H1; a
+precise word count; and duplicate content across pages.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `title` | query, string | Optional. The `<title>` contents. Omitted entirely renders no `<title>` tag at all — distinct from `title=` (empty string), which renders `<title></title>`. |
+| `duplicate_title` | query, bool | Optional, defaults to `false`. Emits the `<title>` tag twice. Only meaningful if `title` is set. |
+| `h1` | query, string | Optional. The `<h1>` contents. Omitted entirely renders no `<h1>` tag at all. |
+| `duplicate_h1` | query, bool | Optional, defaults to `false`. Emits the `<h1>` tag twice. Only meaningful if `h1` is set. |
+| `word_count` | query, `u32` | Optional. Generates a body of exactly this many filler words (`word0 word1 ...`). Ignored if `body` is given. |
+| `body` | query, string | Optional. The page's body text, verbatim. Request this route with the same `body` from two different URLs to simulate duplicate content across two pages. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page | Always — the handler cannot fail. |
+
+**Examples**
+
+```sh
+curl -s "http://localhost:3000/content?title=Page&h1=Heading&word_count=5"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+<title>Page</title>
+</head>
+<body>
+<h1>Heading</h1>
+word0 word1 word2 word3 word4
+</body>
+</html>
+```
+
+```sh
+curl -s "http://localhost:3000/content"
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+</body>
+</html>
+```
+
 ## `GET /delay/{ms}`
 
 Waits `ms` milliseconds before responding, to simulate a slow page load.

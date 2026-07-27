@@ -147,43 +147,42 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ### Phase 3 — Robots.txt & meta robots
 - [x] `/robots.txt` servi depuis un état en mémoire (`PUT /robots.txt` pour le configurer, texte brut, puisqu'un crawler le fetch toujours sans query string) plutôt que depuis un fichier de config — voir la note ci-dessous
 - [x] Meta robots + X-Robots-Tag, avec les cas de conflit (`/robots/meta?directives=...&x_robots_tag=...`)
-- [ ] Lien entre scénarios et règles robots.txt (un scénario "bloqué" doit automatiquement apparaître dans le disallow généré) — reporté : dépend du moteur de scénarios déclaratifs (section 1), qui n'existe pas encore
 
 **Difficulté : moyenne.** La partie non triviale, c'est de garder `/robots.txt` et les pages **cohérents entre eux** sans dupliquer la config à deux endroits — d'où l'intérêt du moteur de scénarios déclaratifs introduit en section 1. Pour cette phase, on a choisi un état mutable en mémoire plutôt qu'un fichier YAML/TOML chargé au démarrage : plus simple, pas de nouvelle dépendance de parsing, et suffisant tant que le moteur de scénarios n'est pas là. Le lien automatique scénario ↔ robots.txt attendra ce moteur.
 
 ### Phase 4 — Rate limiting simple, en mémoire
-- Middleware Tower qui limite par IP/UA avec un stockage in-memory (`dashmap` ou `moka`)
-- 429 + `Retry-After`, ban temporaire simple
-- Endpoint `/ratelimit/status` pour introspection
+- [ ] Middleware Tower qui limite par IP/UA avec un stockage in-memory (`dashmap` ou `moka`)
+- [ ] 429 + `Retry-After`, ban temporaire simple
+- [ ] Endpoint `/ratelimit/status` pour introspection
 
 **Difficulté : moyenne.** Le piège classique ici est l'extraction fiable de l'IP client (proxy, `X-Forwarded-For`, `Forwarded`) — à traiter proprement dès le début plutôt que de le patcher plus tard.
 
 ### Phase 5 — Contenu HTML avancé & JS
-- H1/titres/word count/duplicate content
-- Rendu JS différé (nécessite de servir du JS qui modifie le DOM après coup — reste simple côté serveur, c'est juste du HTML+JS statique généré)
-- Encodage multi-langues, HTML cassé volontairement
+- [x] H1/titres/word count/duplicate content (`/content?title=...&h1=...&word_count=...&body=...` — titre manquant/vide/dupliqué, H1 manquant/dupliqué, nombre de mots exact, contenu dupliqué en rappelant la route avec le même `body` depuis deux URLs). Reporté pour plus tard : H1 en image/SVG, mots avec nombres/tirets/symboles/scripts inclus dans le comptage
+- [ ] Rendu JS différé (nécessite de servir du JS qui modifie le DOM après coup — reste simple côté serveur, c'est juste du HTML+JS statique généré)
+- [ ] Encodage multi-langues, HTML cassé volontairement
 
 **Difficulté : moyenne.** Rien de conceptuellement dur, mais beaucoup de cas particuliers à couvrir proprement (c'est là que la liste de scénarios déclaratifs grossit vraiment).
 
 ### Phase 6 — Anti-bot avancé & rate limiting distribué
-- Honeypots, détection de pattern de crawl trop rapide, challenge JS simulé
-- Abstraction du store de rate limit derrière un trait (`RateLimitStore`), avec deux implémentations : in-memory (par défaut) et Redis (pour tenir la charge / multi-instance)
-- Ban basé sur des règles composées (UA + fréquence + pattern de 404)
+- [ ] Honeypots, détection de pattern de crawl trop rapide, challenge JS simulé
+- [ ] Abstraction du store de rate limit derrière un trait (`RateLimitStore`), avec deux implémentations : in-memory (par défaut) et Redis (pour tenir la charge / multi-instance)
+- [ ] Ban basé sur des règles composées (UA + fréquence + pattern de 404)
 
 **Difficulté : élevée.** C'est ici que l'architecture doit être la plus soignée : bien découpler la logique de décision (les règles) du store (où sont stockés les compteurs), pour ne pas se retrouver à tout réécrire en passant de mémoire à Redis.
 
 ### Phase 7 — Observabilité, admin, packaging
-- Logs structurés + export JSON/CSV, éventuellement métriques Prometheus
-- Reload de config à chaud (watch du fichier YAML)
-- Dashboard web minimal
-- Packaging pour l'auto-hébergement : binaire statique (musl), image Docker, docker-compose avec profil Redis optionnel
+- [ ] Logs structurés + export JSON/CSV, éventuellement métriques Prometheus
+- [ ] Reload de config à chaud (watch du fichier YAML)
+- [ ] Dashboard web minimal
+- [ ] Packaging pour l'auto-hébergement : binaire statique (musl), image Docker, docker-compose avec profil Redis optionnel
 
 
 ### Phase 8 — Bonus
 
-- [] Generic API allowing to configure status code, response headers, etc.
-- [] Discovery d'urls (dans html).
-- [] Setters for robots.txt, etc.
+- [ ] Generic API allowing to configure status code, response headers, etc.
+- [ ] Discovery d'urls (dans html).
+- [ ] Setters for robots.txt, etc.
 
 **Difficulté : élevée**, mais surtout par le volume de travail (pas par la complexité algorithmique) — c'est la phase "produit fini, prêt à distribuer".
 

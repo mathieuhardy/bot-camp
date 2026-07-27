@@ -497,6 +497,72 @@ async fn robots_meta_renders_the_directives_and_sets_the_conflicting_header() {
 }
 
 #[tokio::test]
+async fn content_omits_title_and_h1_by_default() {
+    // Build request
+    let request = Request::builder()
+        .uri("/content")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify status
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(!body.contains("<title>"));
+    assert!(!body.contains("<h1>"));
+}
+
+#[tokio::test]
+async fn content_renders_title_h1_and_word_count() {
+    // Build request
+    let request = Request::builder()
+        .uri("/content?title=Page&h1=Heading&word_count=3")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send request to app
+    let response = app().oneshot(request).await.unwrap();
+
+    // Verify body
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("<title>Page</title>"));
+    assert!(body.contains("<h1>Heading</h1>"));
+    assert!(body.contains("word0 word1 word2"));
+}
+
+#[tokio::test]
+async fn content_can_serve_the_same_body_from_two_different_urls() {
+    // Build requests: same `body`, different paths, to simulate
+    // duplicate content across two pages
+    let request_a = Request::builder()
+        .uri("/content?body=shared+text&title=A")
+        .body(Body::empty())
+        .unwrap();
+    let request_b = Request::builder()
+        .uri("/content?body=shared+text&title=B")
+        .body(Body::empty())
+        .unwrap();
+
+    // Send requests to app
+    let response_a = app().oneshot(request_a).await.unwrap();
+    let response_b = app().oneshot(request_b).await.unwrap();
+
+    // Verify both pages share the same body text
+    let body_a = response_a.into_body().collect().await.unwrap().to_bytes();
+    let body_a = String::from_utf8(body_a.to_vec()).unwrap();
+    let body_b = response_b.into_body().collect().await.unwrap().to_bytes();
+    let body_b = String::from_utf8(body_b.to_vec()).unwrap();
+    assert!(body_a.contains("shared text"));
+    assert!(body_b.contains("shared text"));
+}
+
+#[tokio::test]
 async fn canonical_renders_a_self_referential_link_by_default() {
     // Build request
     let request = Request::builder()

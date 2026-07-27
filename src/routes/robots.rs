@@ -69,7 +69,7 @@ pub async fn robots_meta(Query(params): Query<MetaParams>) -> Result<(HeaderMap,
     };
 
     let context = PageContext {
-        title: "Robots meta".to_string(),
+        titles: vec!["Robots meta".to_string()],
         meta_robots: contents,
         body: "Robots meta tag test page.".to_string(),
         ..Default::default()

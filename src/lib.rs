@@ -26,6 +26,7 @@ pub fn app() -> Router {
     Router::new()
         .route("/auth/basic", get(routes::basic))
         .route("/canonical", get(routes::canonical))
+        .route("/content", get(routes::content))
         .route("/delay/{ms}", get(routes::delay))
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))

@@ -15,8 +15,9 @@ const TEMPLATE_SOURCE: &str = include_str!("../templates/page.html");
 /// Values interpolated into the shared page skeleton.
 #[derive(Default, Serialize)]
 pub(crate) struct PageContext {
-    /// The page's `<title>`.
-    pub(crate) title: String,
+    /// `<title>` contents to render, one tag per entry — zero to omit
+    /// the tag entirely.
+    pub(crate) titles: Vec<String>,
 
     /// Canonical link hrefs to render inside `<head>`.
     pub(crate) canonical_in_head: Vec<String>,
@@ -35,6 +36,10 @@ pub(crate) struct PageContext {
     /// per entry.
     pub(crate) meta_robots: Vec<String>,
 
+    /// `<h1>` contents to render, one tag per entry — zero to omit the
+    /// tag entirely.
+    pub(crate) h1: Vec<String>,
+
     /// Body text.
     pub(crate) body: String,
 }
@@ -51,7 +56,7 @@ pub(crate) struct PageContext {
 /// The rendered HTML.
 pub(crate) fn render_page(context: PageContext) -> String {
     let context = PageContext {
-        title: escape_html(&context.title),
+        titles: context.titles.iter().map(|s| escape_html(s)).collect(),
         canonical_in_head: context
             .canonical_in_head
             .iter()
@@ -65,6 +70,7 @@ pub(crate) fn render_page(context: PageContext) -> String {
         og_url: context.og_url.as_deref().map(escape_html),
         refresh: context.refresh.as_deref().map(escape_html),
         meta_robots: context.meta_robots.iter().map(|s| escape_html(s)).collect(),
+        h1: context.h1.iter().map(|s| escape_html(s)).collect(),
         body: escape_html(&context.body),
     };
 
@@ -98,7 +104,7 @@ mod tests {
     #[test]
     fn escapes_interpolated_values() {
         let context = PageContext {
-            title: "<script>".to_string(),
+            titles: vec!["<script>".to_string()],
             ..Default::default()
         };
 
