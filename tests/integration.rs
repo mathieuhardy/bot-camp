@@ -921,6 +921,175 @@ async fn ratelimit_can_key_by_user_agent_instead_of_ip() {
     assert_eq!(second_response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
+fn honeypot_configure_request(ban_duration_ms: u64) -> Request<Body> {
+    let body = format!(r#"{{"key_strategy":"ip","ban_duration_ms":{ban_duration_ms}}}"#);
+
+    Request::builder()
+        .method("PUT")
+        .uri("/honeypot/config")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn honeypot_allows_the_first_visit_and_bans_afterwards() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(honeypot_configure_request(60_000))
+        .await
+        .unwrap();
+
+    let first = router
+        .clone()
+        .oneshot(request_from("198.51.100.1:1", "/honeypot/trap"))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = router
+        .oneshot(request_from("198.51.100.1:1", "/honeypot/trap"))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::FORBIDDEN);
+    assert!(second.headers().get("retry-after").is_some());
+}
+
+#[tokio::test]
+async fn honeypot_bans_apply_to_any_path_under_the_prefix() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(honeypot_configure_request(60_000))
+        .await
+        .unwrap();
+
+    router
+        .clone()
+        .oneshot(request_from("198.51.100.2:1", "/honeypot/some/deep/path"))
+        .await
+        .unwrap();
+
+    let other_path = router
+        .oneshot(request_from("198.51.100.2:1", "/honeypot/another-path"))
+        .await
+        .unwrap();
+    assert_eq!(other_path.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn honeypot_reset_clears_bans() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(honeypot_configure_request(60_000))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("198.51.100.3:1", "/honeypot/trap"))
+        .await
+        .unwrap();
+
+    let reset_request = Request::builder()
+        .method("POST")
+        .uri("/honeypot/reset")
+        .body(Body::empty())
+        .unwrap();
+    let reset_response = router.clone().oneshot(reset_request).await.unwrap();
+    assert_eq!(reset_response.status(), StatusCode::OK);
+
+    let allowed_again = router
+        .oneshot(request_from("198.51.100.3:1", "/honeypot/trap"))
+        .await
+        .unwrap();
+    assert_eq!(allowed_again.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn honeypot_admin_endpoints_stay_reachable_while_banned() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(honeypot_configure_request(60_000))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("198.51.100.4:1", "/honeypot/trap"))
+        .await
+        .unwrap();
+
+    let status_request = request_from("198.51.100.4:1", "/honeypot/status");
+    let status_response = router.clone().oneshot(status_request).await.unwrap();
+    assert_eq!(status_response.status(), StatusCode::OK);
+    let body = status_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#""banned":true"#));
+
+    let reset_request = Request::builder()
+        .method("POST")
+        .uri("/honeypot/reset")
+        .body(Body::empty())
+        .unwrap();
+    let reset_response = router.oneshot(reset_request).await.unwrap();
+    assert_eq!(reset_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn honeypot_ban_does_not_affect_pre_existing_routes_or_the_ratelimit_playground() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(honeypot_configure_request(60_000))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("198.51.100.5:1", "/honeypot/trap"))
+        .await
+        .unwrap();
+
+    let status_response = router
+        .clone()
+        .oneshot(request_from("198.51.100.5:1", "/status/200"))
+        .await
+        .unwrap();
+    assert_eq!(status_response.status(), StatusCode::OK);
+
+    let ratelimit_response = router
+        .oneshot(request_from("198.51.100.5:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(ratelimit_response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn content_renders_a_hidden_link_pointing_at_the_honeypot() {
+    let request = Request::builder()
+        .uri("/content?hidden_link=/honeypot/trap")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#"href="/honeypot/trap""#));
+}
+
 #[tokio::test]
 async fn canonical_renders_a_self_referential_link_by_default() {
     // Build request

@@ -169,6 +169,7 @@ precise word count; and duplicate content across pages.
 | `duplicate_h1` | query, bool | Optional, defaults to `false`. Emits the `<h1>` tag twice. Only meaningful if `h1` is set. |
 | `word_count` | query, `u32` | Optional. Generates a body of exactly this many filler words (`word0 word1 ...`). Ignored if `body` is given. |
 | `body` | query, string | Optional. The page's body text, verbatim. Request this route with the same `body` from two different URLs to simulate duplicate content across two pages. |
+| `hidden_link` | query, string | Optional. Renders a link to this URL, positioned off-screen — invisible to a real user, but present in the HTML. Point it at `/honeypot/...` to bait a crawler that follows every link regardless of visibility. |
 
 **Response**
 
@@ -368,6 +369,137 @@ HTTP/1.1 400 Bad Request
 content-length: ...
 
 failed to parse header value
+```
+
+## `GET /honeypot/{*path}`
+
+The honeypot trap. A well-behaved crawler should never fetch anything
+under `/honeypot/` at all — the only way in is a link hidden from real
+users (see `hidden_link` on `GET /content`). The first visit from a key
+looks like an ordinary page and springs the ban; every subsequent
+request to **any** path under `/honeypot/` from that key is rejected,
+until the ban expires. Entirely independent from `/ratelimit/*` — its
+own store, its own config/reset/status, no shared state.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `path` | path, string | Anything — the value itself has no effect on the response. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | `ok: /honeypot/{path}` | First visit from this key: the ban is sprung, but this request still succeeds. |
+| `403 Forbidden` | *(empty)*, with a `Retry-After` header (seconds) | This key has already sprung the trap and is still banned. |
+
+**Example**
+
+```sh
+curl -i http://localhost:3000/honeypot/trap
+curl -i http://localhost:3000/honeypot/trap
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 18
+
+ok: /honeypot/trap
+```
+
+```
+HTTP/1.1 403 Forbidden
+retry-after: 600
+content-length: 0
+
+```
+
+## `PUT /honeypot/config`
+
+Replaces the current honeypot policy and clears every ban. Never itself
+gated by the honeypot, so you can always reconfigure even while banned.
+
+**Request**
+
+Body: JSON object.
+
+| Field | Type | Description |
+|---|---|---|
+| `key_strategy` | string | `ip`, `user_agent`, or `both` — how a client is identified. `ip` trusts `X-Forwarded-For`'s first value if present, falling back to the real peer address. |
+| `ban_duration_ms` | `u64` | Ban duration, in milliseconds, once a key reaches any path under `/honeypot/`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | The new policy is in effect. |
+
+**Example**
+
+```sh
+curl -i -X PUT "http://localhost:3000/honeypot/config" \
+  -H "content-type: application/json" \
+  -d '{"key_strategy":"ip","ban_duration_ms":600000}'
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
+## `POST /honeypot/reset`
+
+Clears every ban without changing the configuration. Never itself gated
+by the honeypot.
+
+**Request**
+
+No parameters, no body.
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -i -X POST "http://localhost:3000/honeypot/reset"
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
+## `GET /honeypot/status`
+
+Introspection for a honeypot key. Never itself gated by the honeypot.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `key` | query, string | Optional. The key to inspect. Defaults to the caller's own key. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | JSON: `{"key": "...", "banned": bool, "retry_after_secs": number \| null}` | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -s "http://localhost:3000/honeypot/status"
+```
+
+```json
+{"key": "127.0.0.1", "banned": false, "retry_after_secs": null}
 ```
 
 ## `GET /health`

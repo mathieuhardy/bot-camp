@@ -5,6 +5,7 @@
 //! rate limiting, and anti-bot mechanisms.
 
 mod error;
+mod honeypot;
 mod rate_limit;
 mod routes;
 mod state;
@@ -25,20 +26,28 @@ use crate::state::AppState;
 /// Creates the application router with all routes and middleware.
 ///
 /// The `/ratelimit/{*path}` playground is the only route gated by the
-/// rate limiting middleware — `/ratelimit/config`, `/ratelimit/reset`,
-/// and `/ratelimit/status` stay reachable even while a key is banned,
-/// and every other route is entirely unaffected by rate limiting.
+/// rate limiting middleware, and `/honeypot/{*path}` the only one gated
+/// by the honeypot — each middleware's own `config`/`reset`/`status`
+/// endpoints stay reachable even while a key is banned, and every other
+/// route is entirely unaffected by either.
 ///
 /// # Returns
 /// A configured `Router` ready to serve requests.
 pub fn app() -> Router {
     let state = AppState::default();
 
-    let playground = Router::new()
+    let ratelimit_playground = Router::new()
         .route("/ratelimit/{*path}", get(routes::ratelimit_probe))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             routes::ratelimit_enforce,
+        ));
+
+    let honeypot_playground = Router::new()
+        .route("/honeypot/{*path}", get(routes::honeypot_trap))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            routes::honeypot_enforce,
         ));
 
     Router::new()
@@ -51,6 +60,9 @@ pub fn app() -> Router {
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))
         .route("/health", get(routes::health))
+        .route("/honeypot/config", put(routes::honeypot_set_config))
+        .route("/honeypot/reset", post(routes::honeypot_reset))
+        .route("/honeypot/status", get(routes::honeypot_status))
         .route("/js-render", get(routes::js_render))
         .route("/large-response/{kb}", get(routes::large_response))
         .route("/normalize", get(routes::normalize))
@@ -68,7 +80,8 @@ pub fn app() -> Router {
         )
         .route("/robots/meta", get(routes::robots_meta))
         .route("/status/{code}", get(routes::status))
-        .merge(playground)
+        .merge(ratelimit_playground)
+        .merge(honeypot_playground)
         .with_state(state)
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())

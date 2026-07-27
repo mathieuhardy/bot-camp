@@ -5,6 +5,7 @@ use axum::response::Html;
 use serde::Deserialize;
 
 use crate::templates::PageContext;
+use crate::templates::escape_html;
 use crate::templates::render_page;
 
 /// Query parameters accepted by [`content`].
@@ -39,6 +40,13 @@ pub(crate) struct ContentParams {
     /// duplicate content across two pages.
     #[serde(default)]
     body: Option<String>,
+
+    /// URL for a link hidden from real users (positioned off-screen),
+    /// appended to the body — point it at `/honeypot/...` to bait a
+    /// crawler that blindly follows every link regardless of
+    /// visibility.
+    #[serde(default)]
+    hidden_link: Option<String>,
 }
 
 /// Returns an HTML page with controllable `<title>`, `<h1>`, and body
@@ -57,10 +65,21 @@ pub async fn content(Query(params): Query<ContentParams>) -> Html<String> {
         titles: repeated(params.title, params.duplicate_title),
         h1: repeated(params.h1, params.duplicate_h1),
         body,
+        raw_body: params.hidden_link.map(|href| hidden_link_markup(&href)),
         ..Default::default()
     };
 
     Html(render_page(context))
+}
+
+/// Renders `href` as a link positioned off-screen — invisible to a real
+/// user, but present in the HTML for a crawler that follows every
+/// `href` regardless of visibility.
+fn hidden_link_markup(href: &str) -> String {
+    format!(
+        r#"<a href="{}" style="position:absolute;left:-9999px" aria-hidden="true">hidden link</a>"#,
+        escape_html(href)
+    )
 }
 
 /// Wraps `value` into a `Vec`, duplicated if `duplicate` is set, or an
@@ -100,6 +119,7 @@ mod tests {
             duplicate_h1: false,
             word_count: None,
             body: None,
+            hidden_link: None,
         }
     }
 
@@ -179,5 +199,25 @@ mod tests {
 
         assert!(html.contains("exact body text"));
         assert!(!html.contains("word0"));
+    }
+
+    #[tokio::test]
+    async fn renders_no_hidden_link_when_omitted() {
+        let html = content(Query(params())).await.0;
+
+        assert!(!html.contains("<a "));
+    }
+
+    #[tokio::test]
+    async fn renders_an_off_screen_hidden_link_when_requested() {
+        let html = content(Query(ContentParams {
+            hidden_link: Some("/honeypot/trap".to_string()),
+            ..params()
+        }))
+        .await
+        .0;
+
+        assert!(html.contains(r#"href="/honeypot/trap""#));
+        assert!(html.contains("position:absolute;left:-9999px"));
     }
 }

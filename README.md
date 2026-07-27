@@ -167,17 +167,16 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 **Difficulté : moyenne.** Rien de conceptuellement dur, mais beaucoup de cas particuliers à couvrir proprement (c'est là que la liste de scénarios déclaratifs grossit vraiment).
 
 ### Phase 6 — Anti-bot avancé & rate limiting distribué
-- [ ] Honeypots, détection de pattern de crawl trop rapide, challenge JS simulé
-- [ ] Abstraction du store de rate limit derrière un trait (`RateLimitStore`), avec deux implémentations : in-memory (par défaut) et Redis (pour tenir la charge / multi-instance)
-- [ ] Ban basé sur des règles composées (UA + fréquence + pattern de 404)
+- [x] Honeypot (`GET /honeypot/{*path}` : premier passage banni la clé silencieusement, tout accès suivant sous `/honeypot/` renvoie `403` ; `hidden_link` sur `/content` pour fabriquer la page appât ; système totalement séparé du rate limiter — sa propre config/reset/status)
+- [ ] Détection de pattern de crawl trop rapide (intervalle minimal strict entre deux requêtes, distinct d'un débit sur fenêtre), challenge JS simulé — reporté
+- [ ] Ban basé sur des règles composées (UA + fréquence + pattern de 404) — reporté
+- [ ] Abstraction du store de rate limit derrière un trait (`RateLimitStore`) + backend Redis — reporté, pas de besoin concret tant que bot-camp tourne en mono-process
 
 **Difficulté : élevée.** C'est ici que l'architecture doit être la plus soignée : bien découpler la logique de décision (les règles) du store (où sont stockés les compteurs), pour ne pas se retrouver à tout réécrire en passant de mémoire à Redis.
 
 ### Phase 7 — Observabilité, admin, packaging
-- [ ] Logs structurés + export JSON/CSV, éventuellement métriques Prometheus
-- [ ] Reload de config à chaud (watch du fichier YAML)
+- [ ] Logs structurés, éventuellement métriques Prometheus
 - [ ] Dashboard web minimal
-- [ ] Packaging pour l'auto-hébergement : binaire statique (musl), image Docker, docker-compose avec profil Redis optionnel
 
 
 ### Phase 8 — Bonus

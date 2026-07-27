@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+use crate::honeypot::HoneypotState;
 use crate::rate_limit::RateLimitState;
 
 /// Content served by `GET /robots.txt` until it's overridden via
@@ -19,6 +20,9 @@ pub(crate) struct AppState {
 
     /// Rate limiting configuration and per-key counters.
     pub(crate) rate_limit: Arc<RateLimitState>,
+
+    /// Honeypot configuration and every caught key's ban.
+    pub(crate) honeypot: Arc<HoneypotState>,
 }
 
 impl Default for AppState {
@@ -26,6 +30,7 @@ impl Default for AppState {
         AppState {
             robots_txt: Arc::new(RwLock::new(DEFAULT_ROBOTS_TXT.to_string())),
             rate_limit: Arc::new(RateLimitState::default()),
+            honeypot: Arc::new(HoneypotState::default()),
         }
     }
 }
