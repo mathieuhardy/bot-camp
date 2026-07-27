@@ -921,6 +921,126 @@ async fn ratelimit_can_key_by_user_agent_instead_of_ip() {
     assert_eq!(second_response.status(), StatusCode::TOO_MANY_REQUESTS);
 }
 
+/// Builds a `PUT /ratelimit/config` request with a capacity-1 token
+/// bucket (so a second request from a non-listed key would normally be
+/// limited), plus the given `block_ips`/`allow_ips` entries.
+fn configure_request_with_lists(block_ips: &str, allow_ips: &str) -> Request<Body> {
+    let body = format!(
+        r#"{{"algorithm":"token_bucket","capacity":1,"refill_per_sec":0.0001,
+            "key_strategy":"ip","ban_threshold":10,"ban_duration_ms":100,
+            "block_ips":[{block_ips}],"allow_ips":[{allow_ips}]}}"#
+    );
+
+    Request::builder()
+        .method("PUT")
+        .uri("/ratelimit/config")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn ratelimit_block_list_rejects_a_matching_ip_immediately() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request_with_lists(r#""203.0.113.20""#, ""))
+        .await
+        .unwrap();
+
+    let response = router
+        .oneshot(request_from("203.0.113.20:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn ratelimit_allow_list_bypasses_the_algorithm_entirely() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request_with_lists("", r#""203.0.113.21""#))
+        .await
+        .unwrap();
+
+    // Capacity is 1, but the allow-listed IP should never be limited,
+    // no matter how many requests it makes
+    for _ in 0..5 {
+        let response = router
+            .clone()
+            .oneshot(request_from("203.0.113.21:1", "/ratelimit/page"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn ratelimit_block_list_wins_over_allow_list() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request_with_lists(
+            r#""203.0.113.22""#,
+            r#""203.0.113.22""#,
+        ))
+        .await
+        .unwrap();
+
+    let response = router
+        .oneshot(request_from("203.0.113.22:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn ratelimit_status_reports_block_and_allow_list_membership() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request_with_lists(
+            r#""203.0.113.23""#,
+            r#""203.0.113.24""#,
+        ))
+        .await
+        .unwrap();
+
+    let blocked_status = router
+        .clone()
+        .oneshot(request_from("203.0.113.23:1", "/ratelimit/status"))
+        .await
+        .unwrap();
+    let body = blocked_status
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#""blocked":true"#));
+
+    let allowed_status = router
+        .oneshot(request_from("203.0.113.24:1", "/ratelimit/status"))
+        .await
+        .unwrap();
+    let body = allowed_status
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#""allow_listed":true"#));
+}
+
 fn honeypot_configure_request(ban_duration_ms: u64) -> Request<Body> {
     let body = format!(r#"{{"key_strategy":"ip","ban_duration_ms":{ban_duration_ms}}}"#);
 

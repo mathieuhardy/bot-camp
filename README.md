@@ -155,7 +155,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 - [x] Algorithmes configurables à chaud via `PUT /ratelimit/config` (JSON) : token bucket, fixed window, sliding window (approximé par comptage pondéré à deux fenêtres, pas de log de timestamps)
 - [x] 429 + `Retry-After` sur dépassement de l'algorithme ; ban à deux étages — après `ban_threshold` violations consécutives (configurable), `403` + `Retry-After` pendant `ban_duration_ms` (configurable), indépendamment de l'algorithme
 - [x] `POST /ratelimit/reset` (vide les compteurs sans changer la config) et `GET /ratelimit/status` (introspection : clé, ban en cours, TTL) — ces deux endpoints, plus `/ratelimit/config`, ne sont jamais eux-mêmes soumis au rate limit
-- [ ] Allow-list / block-list explicite d'IP/UA — reporté
+- [x] Allow-list / block-list explicite d'IP/UA (`block_ips`/`allow_ips`/`block_user_agents`/`allow_user_agents` dans `PUT /ratelimit/config`, matching par sous-chaîne — IP/UA complète, préfixe de sous-réseau, ou nom de bot distinctif) : le block-list gagne toujours sur l'allow-list ; l'allow-list court-circuite entièrement l'algorithme (jamais compté, jamais banni) ; le block-list rejette en `403` sans expiration (contrairement au ban temporaire). `GET /ratelimit/status` expose aussi `blocked`/`allow_listed`.
 
 **Difficulté : moyenne.** Le piège classique ici est l'extraction fiable de l'IP client (proxy, `X-Forwarded-For`, `Forwarded`) — traité via `X-Forwarded-For` (premier hop) avec repli sur l'adresse TCP réelle (`ConnectInfo`, donc `main.rs` sert désormais via `into_make_service_with_connect_info`).
 

@@ -6,7 +6,9 @@ mod key;
 
 pub(crate) use algorithm::Algorithm;
 pub(crate) use key::KeyStrategy;
+pub(crate) use key::client_ip;
 pub(crate) use key::extract_key;
+pub(crate) use key::user_agent;
 
 use std::time::Duration;
 use std::time::Instant;
@@ -32,6 +34,29 @@ pub(crate) struct RateLimitConfig {
 
     /// Ban duration, in milliseconds, once `ban_threshold` is reached.
     pub(crate) ban_duration_ms: u64,
+
+    /// IPs that always bypass the algorithm entirely (never counted,
+    /// never banned) — matched as a substring of the request's IP.
+    #[serde(default)]
+    pub(crate) allow_ips: Vec<String>,
+
+    /// IPs that are always rejected, regardless of the algorithm's
+    /// state — matched as a substring of the request's IP. Unlike a
+    /// [`Decision::Banned`] ban, this has no expiry; it lasts until
+    /// removed from the config.
+    #[serde(default)]
+    pub(crate) block_ips: Vec<String>,
+
+    /// `User-Agent`s that always bypass the algorithm entirely —
+    /// matched as a substring of the request's `User-Agent`.
+    #[serde(default)]
+    pub(crate) allow_user_agents: Vec<String>,
+
+    /// `User-Agent`s that are always rejected, regardless of the
+    /// algorithm's state — matched as a substring of the request's
+    /// `User-Agent`.
+    #[serde(default)]
+    pub(crate) block_user_agents: Vec<String>,
 }
 
 impl Default for RateLimitConfig {
@@ -44,8 +69,35 @@ impl Default for RateLimitConfig {
             key_strategy: KeyStrategy::Ip,
             ban_threshold: 3,
             ban_duration_ms: 300_000,
+            allow_ips: Vec::new(),
+            block_ips: Vec::new(),
+            allow_user_agents: Vec::new(),
+            block_user_agents: Vec::new(),
         }
     }
+}
+
+impl RateLimitConfig {
+    /// Whether `ip` or `user_agent` matches an entry in `block_ips` or
+    /// `block_user_agents`. Checked before [`RateLimitConfig::is_allow_listed`]:
+    /// an explicit block always wins over an allow-list entry.
+    pub(crate) fn is_blocked(&self, ip: &str, user_agent: &str) -> bool {
+        matches_any(&self.block_ips, ip) || matches_any(&self.block_user_agents, user_agent)
+    }
+
+    /// Whether `ip` or `user_agent` matches an entry in `allow_ips` or
+    /// `allow_user_agents`.
+    pub(crate) fn is_allow_listed(&self, ip: &str, user_agent: &str) -> bool {
+        matches_any(&self.allow_ips, ip) || matches_any(&self.allow_user_agents, user_agent)
+    }
+}
+
+/// Whether `value` contains any entry of `list` as a substring —
+/// simple enough to match a full IP/`User-Agent` or just a fragment of
+/// one (e.g. a subnet prefix, or a distinctive bot name), with no
+/// dedicated CIDR/pattern syntax to parse.
+fn matches_any(list: &[String], value: &str) -> bool {
+    list.iter().any(|entry| value.contains(entry.as_str()))
 }
 
 /// Outcome of a rate limit check for one request.
@@ -211,6 +263,7 @@ mod tests {
                 key_strategy: KeyStrategy::Ip,
                 ban_threshold,
                 ban_duration_ms: 200,
+                ..RateLimitConfig::default()
             }),
             keys: dashmap::DashMap::new(),
         }
@@ -345,6 +398,7 @@ mod tests {
                 key_strategy: KeyStrategy::Ip,
                 ban_threshold: 10,
                 ban_duration_ms: 200,
+                ..RateLimitConfig::default()
             })
             .await;
 
@@ -359,5 +413,40 @@ mod tests {
 
         assert!(!status.banned);
         assert!(status.retry_after_secs.is_none());
+    }
+
+    #[test]
+    fn is_blocked_matches_an_ip_substring() {
+        let config = RateLimitConfig {
+            block_ips: vec!["203.0.113.".to_string()],
+            ..RateLimitConfig::default()
+        };
+
+        assert!(config.is_blocked("203.0.113.7", "any-ua"));
+        assert!(!config.is_blocked("198.51.100.7", "any-ua"));
+    }
+
+    #[test]
+    fn is_blocked_matches_a_user_agent_substring() {
+        let config = RateLimitConfig {
+            block_user_agents: vec!["BadBot".to_string()],
+            ..RateLimitConfig::default()
+        };
+
+        assert!(config.is_blocked("198.51.100.7", "Mozilla/BadBot/2.0"));
+        assert!(!config.is_blocked("198.51.100.7", "Mozilla/GoodBot/2.0"));
+    }
+
+    #[test]
+    fn is_allow_listed_matches_ip_or_user_agent() {
+        let config = RateLimitConfig {
+            allow_ips: vec!["203.0.113.".to_string()],
+            allow_user_agents: vec!["TrustedBot".to_string()],
+            ..RateLimitConfig::default()
+        };
+
+        assert!(config.is_allow_listed("203.0.113.7", "unknown"));
+        assert!(config.is_allow_listed("198.51.100.7", "TrustedBot/1.0"));
+        assert!(!config.is_allow_listed("198.51.100.7", "unknown"));
     }
 }

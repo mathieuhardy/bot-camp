@@ -24,7 +24,9 @@ use serde::Serialize;
 
 use crate::rate_limit::Decision;
 use crate::rate_limit::RateLimitConfig;
+use crate::rate_limit::client_ip;
 use crate::rate_limit::extract_key;
+use crate::rate_limit::user_agent;
 use crate::state::AppState;
 
 /// Query parameters accepted by [`status`].
@@ -47,25 +49,49 @@ pub(crate) struct StatusResponse {
 
     /// Seconds remaining on the ban, if any.
     retry_after_secs: Option<u64>,
+
+    /// Whether the caller's IP or `User-Agent` is on the block-list.
+    /// Always `false` when `key` was overridden via the query string,
+    /// since block/allow-list matching works off the request's actual
+    /// IP/`User-Agent`, not an arbitrary key.
+    blocked: bool,
+
+    /// Whether the caller's IP or `User-Agent` is on the allow-list.
+    /// Same caveat as `blocked` for an overridden `key`.
+    allow_listed: bool,
 }
 
 /// Axum middleware that gates every request behind the current rate
 /// limiting configuration.
 ///
+/// A block-list match always wins, then an allow-list match bypasses
+/// the algorithm entirely (never counted, never banned); only then does
+/// the configured algorithm run.
+///
 /// # Returns
-/// The wrapped handler's response if allowed; `429 Too Many Requests`
-/// with `Retry-After` if the algorithm's rate is exceeded; `403
-/// Forbidden` with `Retry-After` if the key is temporarily banned.
+/// The wrapped handler's response if allowed; `403 Forbidden` if the
+/// IP/`User-Agent` is block-listed; `429 Too Many Requests` with
+/// `Retry-After` if the algorithm's rate is exceeded; `403 Forbidden`
+/// with `Retry-After` if the key is temporarily banned.
 pub(crate) async fn enforce(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    let key = {
-        let config = state.rate_limit.config().await;
-        extract_key(config.key_strategy, request.headers(), peer)
-    };
+    let config = state.rate_limit.config().await;
+    let ip = client_ip(request.headers(), peer);
+    let ua = user_agent(request.headers());
+
+    if config.is_blocked(&ip, &ua) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    if config.is_allow_listed(&ip, &ua) {
+        return next.run(request).await;
+    }
+
+    let key = extract_key(config.key_strategy, request.headers(), peer);
 
     match state.rate_limit.check(&key).await {
         Decision::Allowed => next.run(request).await,
@@ -132,11 +158,20 @@ pub async fn status(
     headers: HeaderMap,
     Query(params): Query<StatusParams>,
 ) -> Json<StatusResponse> {
-    let key = match params.key {
-        Some(key) => key,
+    let config = state.rate_limit.config().await;
+
+    let (key, blocked, allow_listed) = match params.key {
+        Some(key) => (key, false, false),
         None => {
-            let config = state.rate_limit.config().await;
-            extract_key(config.key_strategy, &headers, peer)
+            let ip = client_ip(&headers, peer);
+            let ua = user_agent(&headers);
+            let key = extract_key(config.key_strategy, &headers, peer);
+
+            (
+                key,
+                config.is_blocked(&ip, &ua),
+                config.is_allow_listed(&ip, &ua),
+            )
         }
     };
 
@@ -146,5 +181,7 @@ pub async fn status(
         key,
         banned: status.banned,
         retry_after_secs: status.retry_after_secs,
+        blocked,
+        allow_listed,
     })
 }

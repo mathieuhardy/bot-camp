@@ -673,10 +673,11 @@ regardless of how the limiter is configured.
 
 Gated by whichever policy is currently set via `PUT /ratelimit/config`
 (a token bucket with capacity `10` and a refill rate of `1`/sec by
-default). Each request is first judged by that algorithm; a client that
-racks up `ban_threshold` consecutive violations is temporarily banned
-for `ban_duration_ms`, independently of what the algorithm says in the
-meantime.
+default). A block-list match rejects immediately; an allow-list match
+bypasses the algorithm entirely; otherwise the request is judged by the
+configured algorithm, and a client that racks up `ban_threshold`
+consecutive violations is temporarily banned for `ban_duration_ms`,
+independently of what the algorithm says in the meantime.
 
 **Request**
 
@@ -688,9 +689,10 @@ meantime.
 
 | Status | Body | When |
 |---|---|---|
-| `200 OK` | `ok: /ratelimit/{path}` | The request is allowed by the current policy. |
+| `200 OK` | `ok: /ratelimit/{path}` | The request is allowed — allow-listed, or within the current policy. |
 | `429 Too Many Requests` | *(empty)*, with a `Retry-After` header (seconds) | The configured algorithm's rate is exceeded. |
 | `403 Forbidden` | *(empty)*, with a `Retry-After` header (seconds) | The key has reached `ban_threshold` consecutive violations and is temporarily banned. |
+| `403 Forbidden` | *(empty)*, no `Retry-After` header | The IP or `User-Agent` matches `block_ips`/`block_user_agents` — permanent until removed from the config, not a timed ban. |
 
 **Example**
 
@@ -709,6 +711,13 @@ counters and bans — old state doesn't carry meaning under a new
 algorithm. Never itself rate-limited, so you can always reconfigure even
 while banned.
 
+A block-list entry always wins; an allow-list entry then bypasses the
+algorithm entirely (never counted, never banned); only requests
+matching neither list reach the configured algorithm. Both lists match
+as a **substring** of the request's IP or `User-Agent` — a full value,
+a subnet-like prefix (`"203.0.113."`), or a distinctive bot name
+(`"BadBot"`) all work, with no separate CIDR/pattern syntax to learn.
+
 **Request**
 
 Body: JSON object.
@@ -720,6 +729,10 @@ Body: JSON object.
 | `key_strategy` | string | `ip`, `user_agent`, or `both` — how a client is identified. `ip` trusts `X-Forwarded-For`'s first value if present, falling back to the real peer address. |
 | `ban_threshold` | `u32` | Consecutive violations before a temporary ban. |
 | `ban_duration_ms` | `u64` | Ban duration, in milliseconds, once `ban_threshold` is reached. |
+| `block_ips` | array of string | Optional, defaults to `[]`. IPs always rejected (`403`, no expiry), regardless of the algorithm. |
+| `allow_ips` | array of string | Optional, defaults to `[]`. IPs that always bypass the algorithm entirely. |
+| `block_user_agents` | array of string | Optional, defaults to `[]`. Same as `block_ips`, matched against `User-Agent`. |
+| `allow_user_agents` | array of string | Optional, defaults to `[]`. Same as `allow_ips`, matched against `User-Agent`. |
 
 **Response**
 
@@ -778,13 +791,13 @@ Never itself rate-limited.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `key` | query, string | Optional. The key to inspect. Defaults to the caller's own key, computed with the currently configured `key_strategy`. |
+| `key` | query, string | Optional. The key to inspect. Defaults to the caller's own key, computed with the currently configured `key_strategy`. When given, `blocked`/`allow_listed` are always reported `false`, since list matching works off the request's actual IP/`User-Agent`, not an arbitrary key. |
 
 **Response**
 
 | Status | Body | When |
 |---|---|---|
-| `200 OK` | JSON: `{"key": "...", "banned": bool, "retry_after_secs": number \| null}` | Always — the handler cannot fail. |
+| `200 OK` | JSON: `{"key": "...", "banned": bool, "retry_after_secs": number \| null, "blocked": bool, "allow_listed": bool}` | Always — the handler cannot fail. |
 
 **Example**
 
@@ -793,7 +806,7 @@ curl -s "http://localhost:3000/ratelimit/status"
 ```
 
 ```json
-{"key": "127.0.0.1", "banned": false, "retry_after_secs": null}
+{"key": "127.0.0.1", "banned": false, "retry_after_secs": null, "blocked": false, "allow_listed": false}
 ```
 
 ## `GET /redirect/{code}`

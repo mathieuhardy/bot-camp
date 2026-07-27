@@ -30,7 +30,7 @@ pub(crate) fn extract_key(strategy: KeyStrategy, headers: &HeaderMap, peer: Sock
 
 /// Extracts the client IP from `X-Forwarded-For`'s first value, or
 /// `peer` if the header is absent or unparseable.
-fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> String {
+pub(crate) fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> String {
     headers
         .get("x-forwarded-for")
         .and_then(|value| value.to_str().ok())
@@ -40,7 +40,7 @@ fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> String {
 }
 
 /// Extracts the client's `User-Agent`, or `"unknown"` if absent.
-fn user_agent(headers: &HeaderMap) -> String {
+pub(crate) fn user_agent(headers: &HeaderMap) -> String {
     headers
         .get("user-agent")
         .and_then(|value| value.to_str().ok())
