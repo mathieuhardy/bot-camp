@@ -168,7 +168,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 
 ### Phase 6 — Anti-bot avancé & rate limiting distribué
 - [x] Honeypot (`GET /honeypot/{*path}` : premier passage banni la clé silencieusement, tout accès suivant sous `/honeypot/` renvoie `403` ; `hidden_link` sur `/content` pour fabriquer la page appât ; système totalement séparé du rate limiter — sa propre config/reset/status)
-- [ ] Détection de pattern de crawl trop rapide (intervalle minimal strict entre deux requêtes, distinct d'un débit sur fenêtre), challenge JS simulé — reporté
+- [x] Détection de pattern de crawl trop rapide (`min_interval` : nouvelle variante de `Algorithm` dans `PUT /ratelimit/config` — `{"algorithm":"min_interval","min_interval_ms":...}` — rejette une requête arrivant avant `min_interval_ms` depuis la précédente de la même clé, acceptée ou non ; réutilise le ban à deux étages, `/ratelimit/reset` et `/ratelimit/status` existants, aucune nouvelle route). Challenge JS simulé — reporté
 - [ ] Ban basé sur des règles composées (UA + fréquence + pattern de 404) — reporté
 - [ ] Abstraction du store de rate limit derrière un trait (`RateLimitStore`) + backend Redis — reporté, pas de besoin concret tant que bot-camp tourne en mono-process
 

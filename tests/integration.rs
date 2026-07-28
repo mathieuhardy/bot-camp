@@ -1041,6 +1041,35 @@ async fn ratelimit_status_reports_block_and_allow_list_membership() {
     assert!(body.contains(r#""allow_listed":true"#));
 }
 
+#[tokio::test]
+async fn ratelimit_min_interval_limits_a_request_that_arrives_too_soon() {
+    let router = app();
+
+    let body = r#"{"algorithm":"min_interval","min_interval_ms":60000,
+        "key_strategy":"ip","ban_threshold":10,"ban_duration_ms":100}"#;
+    let configure = Request::builder()
+        .method("PUT")
+        .uri("/ratelimit/config")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    router.clone().oneshot(configure).await.unwrap();
+
+    let first = router
+        .clone()
+        .oneshot(request_from("203.0.113.30:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = router
+        .oneshot(request_from("203.0.113.30:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(second.headers().get("retry-after").is_some());
+}
+
 fn honeypot_configure_request(ban_duration_ms: u64) -> Request<Body> {
     let body = format!(r#"{{"key_strategy":"ip","ban_duration_ms":{ban_duration_ms}}}"#);
 

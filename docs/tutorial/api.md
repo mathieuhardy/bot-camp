@@ -724,8 +724,8 @@ Body: JSON object.
 
 | Field | Type | Description |
 |---|---|---|
-| `algorithm` | string | `token_bucket`, `fixed_window`, or `sliding_window`. |
-| ...algorithm fields | — | `token_bucket`: `capacity` (`u32`), `refill_per_sec` (float). `fixed_window`/`sliding_window`: `limit` (`u32`), `window_ms` (`u64`). |
+| `algorithm` | string | `token_bucket`, `fixed_window`, `sliding_window`, or `min_interval`. |
+| ...algorithm fields | — | `token_bucket`: `capacity` (`u32`), `refill_per_sec` (float). `fixed_window`/`sliding_window`: `limit` (`u32`), `window_ms` (`u64`). `min_interval`: `min_interval_ms` (`u64`). |
 | `key_strategy` | string | `ip`, `user_agent`, or `both` — how a client is identified. `ip` trusts `X-Forwarded-For`'s first value if present, falling back to the real peer address. |
 | `ban_threshold` | `u32` | Consecutive violations before a temporary ban. |
 | `ban_duration_ms` | `u64` | Ban duration, in milliseconds, once `ban_threshold` is reached. |
@@ -733,6 +733,13 @@ Body: JSON object.
 | `allow_ips` | array of string | Optional, defaults to `[]`. IPs that always bypass the algorithm entirely. |
 | `block_user_agents` | array of string | Optional, defaults to `[]`. Same as `block_ips`, matched against `User-Agent`. |
 | `allow_user_agents` | array of string | Optional, defaults to `[]`. Same as `allow_ips`, matched against `User-Agent`. |
+
+Unlike the other three algorithms, which cap a *rate* over a window,
+`min_interval` enforces a strict *pacing*: a request is rejected if it
+arrives less than `min_interval_ms` after the same key's previous
+request, accepted or not. That catches a crawler ignoring the
+`Crawl-delay` it was given even if it otherwise stays under a broader
+quota.
 
 **Response**
 

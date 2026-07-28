@@ -1,5 +1,5 @@
-//! Pluggable rate limiting algorithms: token bucket, fixed window, and
-//! sliding window.
+//! Pluggable rate limiting algorithms: token bucket, fixed window,
+//! sliding window, and minimal interval.
 
 use std::time::Duration;
 use std::time::Instant;
@@ -23,6 +23,13 @@ pub(crate) enum Algorithm {
     /// a weighted count across the current and previous fixed windows —
     /// smooths out the fixed-window boundary burst.
     SlidingWindow { limit: u32, window_ms: u64 },
+
+    /// Rejects a request if it arrives less than `min_interval_ms` after
+    /// the key's previous request (accepted or not) — a strict pacing
+    /// check, distinct from a rate over a window: it catches a crawler
+    /// that ignores `Crawl-delay` even if it stays under a broader
+    /// quota.
+    MinInterval { min_interval_ms: u64 },
 }
 
 /// Per-key bookkeeping for whichever [`Algorithm`] is configured.
@@ -41,6 +48,10 @@ pub(crate) enum AlgorithmState {
         window_start: Instant,
         current_count: u32,
         previous_count: u32,
+    },
+
+    MinInterval {
+        last_seen: Option<Instant>,
     },
 }
 
@@ -70,6 +81,8 @@ impl AlgorithmState {
                 current_count: 0,
                 previous_count: 0,
             },
+
+            Algorithm::MinInterval { .. } => AlgorithmState::MinInterval { last_seen: None },
         }
     }
 
@@ -116,6 +129,11 @@ impl AlgorithmState {
                 *window_ms,
                 now,
             ),
+
+            (
+                AlgorithmState::MinInterval { last_seen },
+                Algorithm::MinInterval { min_interval_ms },
+            ) => check_min_interval(last_seen, *min_interval_ms, now),
 
             _ => unreachable!("algorithm state always matches the algorithm it was created from"),
         }
@@ -214,6 +232,35 @@ fn check_sliding_window(
     AlgorithmDecision::Limited {
         retry_after_secs: 1,
     }
+}
+
+/// Rejects a request that arrives less than `min_interval_ms` after
+/// `last_seen`, then always records `now` as the new `last_seen` — even
+/// on rejection, so a key that keeps hammering must wait the full
+/// interval from its most recent attempt, not just its last accepted
+/// one.
+fn check_min_interval(
+    last_seen: &mut Option<Instant>,
+    min_interval_ms: u64,
+    now: Instant,
+) -> AlgorithmDecision {
+    let min_interval = Duration::from_millis(min_interval_ms);
+
+    let decision = match *last_seen {
+        Some(previous) if now.saturating_duration_since(previous) < min_interval => {
+            let retry_after = min_interval - now.saturating_duration_since(previous);
+
+            AlgorithmDecision::Limited {
+                retry_after_secs: retry_after.as_secs().max(1),
+            }
+        }
+
+        _ => AlgorithmDecision::Allowed,
+    };
+
+    *last_seen = Some(now);
+
+    decision
 }
 
 #[cfg(test)]
@@ -339,6 +386,89 @@ mod tests {
         assert!(matches!(
             state.check(&algorithm, late_next),
             AlgorithmDecision::Allowed
+        ));
+    }
+
+    #[test]
+    fn min_interval_allows_the_first_request() {
+        let algorithm = Algorithm::MinInterval {
+            min_interval_ms: 1000,
+        };
+        let now = Instant::now();
+        let mut state = AlgorithmState::new(&algorithm, now);
+
+        assert!(matches!(
+            state.check(&algorithm, now),
+            AlgorithmDecision::Allowed
+        ));
+    }
+
+    #[test]
+    fn min_interval_limits_a_request_that_arrives_too_soon() {
+        let algorithm = Algorithm::MinInterval {
+            min_interval_ms: 1000,
+        };
+        let now = Instant::now();
+        let mut state = AlgorithmState::new(&algorithm, now);
+
+        assert!(matches!(
+            state.check(&algorithm, now),
+            AlgorithmDecision::Allowed
+        ));
+
+        let too_soon = now + Duration::from_millis(500);
+        assert!(matches!(
+            state.check(&algorithm, too_soon),
+            AlgorithmDecision::Limited { .. }
+        ));
+    }
+
+    #[test]
+    fn min_interval_allows_again_once_the_interval_has_elapsed() {
+        let algorithm = Algorithm::MinInterval {
+            min_interval_ms: 1000,
+        };
+        let now = Instant::now();
+        let mut state = AlgorithmState::new(&algorithm, now);
+
+        assert!(matches!(
+            state.check(&algorithm, now),
+            AlgorithmDecision::Allowed
+        ));
+
+        let later = now + Duration::from_millis(1000);
+        assert!(matches!(
+            state.check(&algorithm, later),
+            AlgorithmDecision::Allowed
+        ));
+    }
+
+    #[test]
+    fn min_interval_keeps_rejecting_a_key_that_keeps_hammering() {
+        let algorithm = Algorithm::MinInterval {
+            min_interval_ms: 1000,
+        };
+        let now = Instant::now();
+        let mut state = AlgorithmState::new(&algorithm, now);
+
+        assert!(matches!(
+            state.check(&algorithm, now),
+            AlgorithmDecision::Allowed
+        ));
+
+        // Each rejected attempt still pushes `last_seen` forward, so
+        // arriving 500ms after the *previous rejection* is still too
+        // soon relative to a fresh 1000ms window.
+        let first_retry = now + Duration::from_millis(500);
+        assert!(matches!(
+            state.check(&algorithm, first_retry),
+            AlgorithmDecision::Limited { .. }
+        ));
+
+        let second_retry = first_retry + Duration::from_millis(500);
+        assert!(matches!(
+            state.check(&algorithm, second_retry),
+            AlgorithmDecision::Limited { .. }
         ));
     }
 }
