@@ -1225,6 +1225,63 @@ async fn honeypot_ban_does_not_affect_pre_existing_routes_or_the_ratelimit_playg
 }
 
 #[tokio::test]
+async fn challenge_serves_the_checking_page_without_the_cookie() {
+    let request = Request::builder()
+        .uri("/challenge/page")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("botcamp_challenge=ok"));
+    assert!(!body.contains("ok: /challenge/page"));
+}
+
+#[tokio::test]
+async fn challenge_lets_a_request_with_the_valid_cookie_through() {
+    let request = Request::builder()
+        .uri("/challenge/page")
+        .header("cookie", "botcamp_challenge=ok")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert_eq!(body, "ok: /challenge/page");
+}
+
+#[tokio::test]
+async fn challenge_config_changes_the_rendered_delay() {
+    let router = app();
+
+    let configure = Request::builder()
+        .method("PUT")
+        .uri("/challenge/config")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"delay_ms":9000,"cookie_max_age_secs":30}"#))
+        .unwrap();
+    let configure_response = router.clone().oneshot(configure).await.unwrap();
+    assert_eq!(configure_response.status(), StatusCode::OK);
+
+    let request = Request::builder()
+        .uri("/challenge/page")
+        .body(Body::empty())
+        .unwrap();
+    let response = router.oneshot(request).await.unwrap();
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("}, 9000);"));
+    assert!(body.contains("max-age=30"));
+}
+
+#[tokio::test]
 async fn content_renders_a_hidden_link_pointing_at_the_honeypot() {
     let request = Request::builder()
         .uri("/content?hidden_link=/honeypot/trap")

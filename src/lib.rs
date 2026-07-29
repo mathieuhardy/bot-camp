@@ -4,6 +4,7 @@
 //! against various scenarios: HTTP codes, headers, robots.txt, redirects,
 //! rate limiting, and anti-bot mechanisms.
 
+mod challenge;
 mod error;
 mod honeypot;
 mod rate_limit;
@@ -26,10 +27,11 @@ use crate::state::AppState;
 /// Creates the application router with all routes and middleware.
 ///
 /// The `/ratelimit/{*path}` playground is the only route gated by the
-/// rate limiting middleware, and `/honeypot/{*path}` the only one gated
-/// by the honeypot — each middleware's own `config`/`reset`/`status`
-/// endpoints stay reachable even while a key is banned, and every other
-/// route is entirely unaffected by either.
+/// rate limiting middleware, `/honeypot/{*path}` the only one gated by
+/// the honeypot, and `/challenge/{*path}` the only one gated by the JS
+/// challenge — each middleware's own admin endpoints stay reachable even
+/// while a key is banned (or unsolved), and every other route is
+/// entirely unaffected by any of them.
 ///
 /// # Returns
 /// A configured `Router` ready to serve requests.
@@ -50,10 +52,18 @@ pub fn app() -> Router {
             routes::honeypot_enforce,
         ));
 
+    let challenge_playground = Router::new()
+        .route("/challenge/{*path}", get(routes::challenge_probe))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            routes::challenge_enforce,
+        ));
+
     Router::new()
         .route("/auth/basic", get(routes::basic))
         .route("/broken-html", get(routes::broken_html))
         .route("/canonical", get(routes::canonical))
+        .route("/challenge/config", put(routes::challenge_set_config))
         .route("/content", get(routes::content))
         .route("/delay/{ms}", get(routes::delay))
         .route("/encoding", get(routes::encoding))
@@ -82,6 +92,7 @@ pub fn app() -> Router {
         .route("/status/{code}", get(routes::status))
         .merge(ratelimit_playground)
         .merge(honeypot_playground)
+        .merge(challenge_playground)
         .with_state(state)
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())

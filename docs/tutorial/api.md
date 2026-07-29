@@ -152,6 +152,97 @@ Canonical tag test page.
 </html>
 ```
 
+## `GET /challenge/{*path}`
+
+A simulated JS challenge, "checking your browser" style. A request
+without the `botcamp_challenge=ok` cookie gets an HTML page whose
+deferred script waits `delay_ms` before setting that cookie and
+reloading — a crawler that never executes JavaScript stays on this page
+forever; one that does (e.g. a headless browser) passes through to the
+real response after the delay. The cookie's value is fixed and not a
+real cryptographic proof — the point is testing whether the crawler
+runs JavaScript and persists cookies across a reload, not solving a
+puzzle. Unlike `/ratelimit/*` and `/honeypot/*`, there's no per-key
+state on the server: passing the gate depends only on the request's
+cookie, so there's no `reset`/`status` endpoint to go with it.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `path` | path, string | Anything — the value itself has no effect on the response. |
+| *(cookie)* `botcamp_challenge` | cookie, string | Must equal `ok` to pass through. Set automatically by the challenge page's own script after `delay_ms`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | `ok: /challenge/{path}` | The request already carries a valid `botcamp_challenge` cookie. |
+| `200 OK` | HTML "checking your browser" page with a deferred script | No valid cookie yet. |
+
+**Example**
+
+```sh
+curl -s http://localhost:3000/challenge/page
+```
+
+```html
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+Checking your browser before accessing bot-camp...
+<div id="js-content"></div>
+<script>
+setTimeout(function() { document.cookie = "botcamp_challenge=ok; path=/; max-age=3600"; location.reload(); }, 1500);
+</script>
+</body>
+</html>
+```
+
+```sh
+curl -s --cookie "botcamp_challenge=ok" http://localhost:3000/challenge/page
+```
+
+```
+ok: /challenge/page
+```
+
+## `PUT /challenge/config`
+
+Replaces the current challenge policy. Never itself gated by the
+challenge, so you can always reconfigure.
+
+**Request**
+
+Body: JSON object.
+
+| Field | Type | Description |
+|---|---|---|
+| `delay_ms` | `u64` | Delay, in milliseconds, before the challenge page's script sets the cookie and reloads. |
+| `cookie_max_age_secs` | `u64` | `max-age`, in seconds, set on the validation cookie once solved. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | *(empty)* | The new policy is in effect. |
+
+**Example**
+
+```sh
+curl -i -X PUT "http://localhost:3000/challenge/config" \
+  -H "content-type: application/json" \
+  -d '{"delay_ms":3000,"cookie_max_age_secs":600}'
+```
+
+```
+HTTP/1.1 200 OK
+content-length: 0
+
+```
+
 ## `GET /content`
 
 Returns an HTML page with controllable `<title>`, `<h1>`, and body

@@ -3,6 +3,7 @@
 mod auth;
 mod broken_html;
 mod canonical;
+mod challenge;
 mod content;
 mod delay;
 mod encoding;
@@ -20,6 +21,9 @@ mod status;
 pub use auth::basic;
 pub use broken_html::broken_html;
 pub use canonical::canonical;
+pub(crate) use challenge::enforce as challenge_enforce;
+pub use challenge::probe as challenge_probe;
+pub use challenge::set_config as challenge_set_config;
 pub use content::content;
 pub use delay::delay;
 pub use encoding::encoding;
