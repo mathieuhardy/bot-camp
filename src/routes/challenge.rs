@@ -19,6 +19,7 @@ use crate::challenge::COOKIE_NAME;
 use crate::challenge::COOKIE_VALUE;
 use crate::challenge::ChallengeConfig;
 use crate::challenge::is_solved;
+use crate::logging::with_rule;
 use crate::state::AppState;
 use crate::templates::PageContext;
 use crate::templates::render_page;
@@ -41,7 +42,10 @@ pub(crate) async fn enforce(
 
     let config = state.challenge.config().await;
 
-    Html(challenge_page(&config)).into_response()
+    with_rule(
+        Html(challenge_page(&config)).into_response(),
+        "challenge_blocked",
+    )
 }
 
 /// Renders the "checking your browser" page: a deferred script that

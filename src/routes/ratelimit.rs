@@ -22,6 +22,7 @@ use axum::response::Response;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::logging::with_rule;
 use crate::rate_limit::Decision;
 use crate::rate_limit::RateLimitConfig;
 use crate::rate_limit::client_ip;
@@ -84,7 +85,7 @@ pub(crate) async fn enforce(
     let ua = user_agent(request.headers());
 
     if config.is_blocked(&ip, &ua) {
-        return StatusCode::FORBIDDEN.into_response();
+        return with_rule(StatusCode::FORBIDDEN.into_response(), "rate_limit_blocked");
     }
 
     if config.is_allow_listed(&ip, &ua) {
@@ -96,17 +97,23 @@ pub(crate) async fn enforce(
     match state.rate_limit.check(&key).await {
         Decision::Allowed => next.run(request).await,
 
-        Decision::Limited { retry_after_secs } => (
-            StatusCode::TOO_MANY_REQUESTS,
-            [(RETRY_AFTER, retry_after_secs.to_string())],
-        )
-            .into_response(),
+        Decision::Limited { retry_after_secs } => with_rule(
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(RETRY_AFTER, retry_after_secs.to_string())],
+            )
+                .into_response(),
+            "rate_limit_limited",
+        ),
 
-        Decision::Banned { retry_after_secs } => (
-            StatusCode::FORBIDDEN,
-            [(RETRY_AFTER, retry_after_secs.to_string())],
-        )
-            .into_response(),
+        Decision::Banned { retry_after_secs } => with_rule(
+            (
+                StatusCode::FORBIDDEN,
+                [(RETRY_AFTER, retry_after_secs.to_string())],
+            )
+                .into_response(),
+            "rate_limit_banned",
+        ),
     }
 }
 

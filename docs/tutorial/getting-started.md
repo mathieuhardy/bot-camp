@@ -32,6 +32,20 @@ defaults out of the box. This section will grow as config file support
 | Listen address | `0.0.0.0:3000` | Not yet configurable. |
 | Log level | `info` | Override with the `RUST_LOG` env var (e.g. `RUST_LOG=debug`). |
 
+## Logs
+
+Every request produces one JSON line on stdout, at `info` level:
+
+```json
+{"timestamp":"...","level":"INFO","message":"request","method":"GET","path":"/ratelimit/foo","ip":"127.0.0.1","user_agent":"curl/8.5.0","status":429,"latency_ms":0,"rule":"rate_limit_limited","target":"bot_camp::logging"}
+```
+
+`rule` reports which middleware (if any) decided the response — e.g.
+`rate_limit_limited`, `rate_limit_banned`, `rate_limit_blocked`,
+`honeypot_sprung`, `honeypot_banned`, `challenge_blocked` — or `none`
+for an ordinary request. Pipe stdout to a file or a log collector to
+replay/analyze how a crawler under test actually behaved.
+
 ## Deployment
 
 ### Run locally

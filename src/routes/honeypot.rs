@@ -24,6 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::honeypot::HoneypotConfig;
+use crate::logging::with_rule;
 use crate::rate_limit::extract_key;
 use crate::state::AppState;
 
@@ -67,11 +68,14 @@ pub(crate) async fn enforce(
     };
 
     match state.honeypot.retry_after_secs(&key) {
-        Some(retry_after_secs) => (
-            StatusCode::FORBIDDEN,
-            [(RETRY_AFTER, retry_after_secs.to_string())],
-        )
-            .into_response(),
+        Some(retry_after_secs) => with_rule(
+            (
+                StatusCode::FORBIDDEN,
+                [(RETRY_AFTER, retry_after_secs.to_string())],
+            )
+                .into_response(),
+            "honeypot_banned",
+        ),
 
         None => next.run(request).await,
     }
@@ -89,14 +93,17 @@ pub async fn trap(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Path(path): Path<String>,
-) -> String {
+) -> Response {
     let key = {
         let config = state.honeypot.config().await;
         extract_key(config.key_strategy, &headers, peer)
     };
     state.honeypot.spring(&key).await;
 
-    format!("ok: /honeypot/{path}")
+    with_rule(
+        format!("ok: /honeypot/{path}").into_response(),
+        "honeypot_sprung",
+    )
 }
 
 /// Replaces the current honeypot configuration and clears every ban.

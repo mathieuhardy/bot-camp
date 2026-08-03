@@ -7,6 +7,7 @@
 mod challenge;
 mod error;
 mod honeypot;
+mod logging;
 mod rate_limit;
 mod routes;
 mod state;
@@ -97,4 +98,5 @@ pub fn app() -> Router {
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
+        .layer(middleware::from_fn(logging::log_request))
 }

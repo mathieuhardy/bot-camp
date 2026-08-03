@@ -176,7 +176,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 **Difficulté : élevée.** C'est ici que l'architecture doit être la plus soignée : bien découpler la logique de décision (les règles) du store (où sont stockés les compteurs), pour ne pas se retrouver à tout réécrire en passant de mémoire à Redis.
 
 ### Phase 7 — Observabilité, admin, packaging
-- [ ] Logs structurés, éventuellement métriques Prometheus
+- [x] Logs structurés (`src/logging.rs` : middleware englobant tout le routeur, une ligne JSON par requête — méthode, path, IP, `User-Agent`, code, latence, et la règle appliquée par le rate limiter/honeypot/challenge le cas échéant via une extension `AppliedRule` posée sur la réponse ; `main.rs` bascule le layer `tracing-subscriber` en JSON aplati). Métriques Prometheus reportées — pas encore de besoin concret
 - [ ] Dashboard web minimal
 
 

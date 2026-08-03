@@ -14,10 +14,11 @@ use bot_camp::app;
 
 #[tokio::main]
 async fn main() {
-    // Initialize tracing
+    // Initialize tracing: one flat JSON object per log line, so request
+    // logs can be parsed/replayed by other tools
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().json().flatten_event(true))
         .init();
 
     // Bind address
