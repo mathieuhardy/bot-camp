@@ -170,14 +170,12 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 - [x] Honeypot (`GET /honeypot/{*path}` : premier passage banni la clé silencieusement, tout accès suivant sous `/honeypot/` renvoie `403` ; `hidden_link` sur `/content` pour fabriquer la page appât ; système totalement séparé du rate limiter — sa propre config/reset/status)
 - [x] Détection de pattern de crawl trop rapide (`min_interval` : nouvelle variante de `Algorithm` dans `PUT /ratelimit/config` — `{"algorithm":"min_interval","min_interval_ms":...}` — rejette une requête arrivant avant `min_interval_ms` depuis la précédente de la même clé, acceptée ou non ; réutilise le ban à deux étages, `/ratelimit/reset` et `/ratelimit/status` existants, aucune nouvelle route)
 - [x] Challenge anti-bot simulé (`GET /challenge/{*path}` : sans le cookie `botcamp_challenge=ok`, renvoie une page "checking your browser" dont un script différé pose le cookie après `delay_ms` puis recharge — un crawler qui n'exécute pas JS reste bloqué indéfiniment ; `PUT /challenge/config` règle `delay_ms`/`cookie_max_age_secs`. Pas d'état par clé ni de `reset`/`status` : contrairement au rate limiter et au honeypot, le seul critère est la présence du cookie sur la requête, rien à compter ni bannir côté serveur)
-- [ ] Ban basé sur des règles composées (UA + fréquence + pattern de 404) — reporté
-- [ ] Abstraction du store de rate limit derrière un trait (`RateLimitStore`) + backend Redis — reporté, pas de besoin concret tant que bot-camp tourne en mono-process
 
 **Difficulté : élevée.** C'est ici que l'architecture doit être la plus soignée : bien découpler la logique de décision (les règles) du store (où sont stockés les compteurs), pour ne pas se retrouver à tout réécrire en passant de mémoire à Redis.
 
 ### Phase 7 — Observabilité, admin, packaging
 - [x] Logs structurés (`src/logging.rs` : middleware englobant tout le routeur, une ligne JSON par requête — méthode, path, IP, `User-Agent`, code, latence, et la règle appliquée par le rate limiter/honeypot/challenge le cas échéant via une extension `AppliedRule` posée sur la réponse ; `main.rs` bascule le layer `tracing-subscriber` en JSON aplati). Métriques Prometheus reportées — pas encore de besoin concret
-- [ ] Dashboard web minimal
+- [x] Dashboard temps réel (`GET /dashboard` : single-page app Svelte + shadcn-svelte, buildée par Vite dans `frontend/` et embarquée dans le binaire à la compilation via `rust-embed` — Node/npm ne sont nécessaires qu'au build, jamais à l'exécution ; `GET /dashboard/snapshot` expose le même état en JSON brut ; `GET /dashboard/ws` diffuse en direct, par WebSocket, chaque décision du rate limiter et du honeypot via un canal `tokio::sync::broadcast` posé dans `AppState`, en plus du snapshot initial. Va au-delà du "minimal" prévu initialement — pas de registre de scénarios dynamique, la liste des endpoints affichée reste statique, écrite à la main côté frontend)
 
 
 ### Phase 8 — Bonus

@@ -5,6 +5,7 @@
 //! rate limiting, and anti-bot mechanisms.
 
 mod challenge;
+mod dashboard;
 mod error;
 mod honeypot;
 mod logging;
@@ -66,6 +67,10 @@ pub fn app() -> Router {
         .route("/canonical", get(routes::canonical))
         .route("/challenge/config", put(routes::challenge_set_config))
         .route("/content", get(routes::content))
+        .route("/dashboard", get(routes::dashboard_index))
+        .route("/dashboard/snapshot", get(routes::dashboard_snapshot))
+        .route("/dashboard/ws", get(routes::dashboard_ws))
+        .route("/dashboard/{*path}", get(routes::dashboard_assets))
         .route("/delay/{ms}", get(routes::delay))
         .route("/encoding", get(routes::encoding))
         .route("/headers/echo", get(routes::echo))

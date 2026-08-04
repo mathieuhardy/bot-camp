@@ -301,6 +301,107 @@ curl -s "http://localhost:3000/content"
 </html>
 ```
 
+## `GET /dashboard`
+
+Serves the dashboard: a Svelte single-page app, built at compile time
+from `frontend/` and embedded into the binary, giving a live view of the
+rate limiter, honeypot, and JS challenge. Not itself gated by any of the
+three mechanisms.
+
+**Request**
+
+*(none)*
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The dashboard's `index.html` | Always. |
+
+**Example**
+
+```sh
+curl -s http://localhost:3000/dashboard | head -1
+```
+
+```
+<!doctype html>
+```
+
+## `GET /dashboard/{*path}`
+
+Serves the dashboard's other built assets (JS/CSS bundles under
+`assets/`, the favicon, etc.) by their path relative to `frontend/dist`.
+You won't call this directly — the page above references it.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `path` | path, string | The asset's path relative to `frontend/dist`. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The embedded file, with a guessed `Content-Type` | The path matches a built asset. |
+| `404 Not Found` | *(empty)* | No such asset was built. |
+
+## `GET /dashboard/snapshot`
+
+A point-in-time view of the rate limiter, honeypot, and challenge — the
+same shape sent once over `GET /dashboard/ws` when a client connects.
+Handy to `curl` without opening a WebSocket.
+
+**Request**
+
+*(none)*
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | JSON: `{"rate_limit": {"config": {...}, "keys": [...]}, "honeypot": {"config": {...}, "keys": [...]}, "challenge": {...}}` | Always. |
+
+**Example**
+
+```sh
+curl -s http://localhost:3000/dashboard/snapshot
+```
+
+```json
+{"rate_limit":{"config":{"algorithm":"token_bucket","capacity":10,"refill_per_sec":1.0,"key_strategy":"ip","ban_threshold":3,"ban_duration_ms":300000,"allow_ips":[],"block_ips":[],"allow_user_agents":[],"block_user_agents":[]},"keys":[]},"honeypot":{"config":{"key_strategy":"ip","ban_duration_ms":600000},"keys":[]},"challenge":{"delay_ms":1500,"cookie_max_age_secs":3600}}
+```
+
+## `GET /dashboard/ws`
+
+Upgrades to a WebSocket connection. Sends the current snapshot once,
+tagged `"type":"snapshot"`, then relays every subsequent rate limiter and
+honeypot decision as it happens, tagged `"type":"event"` — one text frame
+per message, both JSON. The connection stays open until the client closes
+it; a lagging client simply misses events rather than being disconnected.
+
+**Request**
+
+*(a WebSocket upgrade — no query parameters)*
+
+**Response**
+
+| Message | Body | When |
+|---|---|---|
+| First | JSON: `{"type": "snapshot", "rate_limit": {...}, "honeypot": {...}, "challenge": {...}}` | Immediately on connect. |
+| Every one after | JSON: `{"type": "event", "timestamp_ms": number, "source": "rate_limit" \| "honeypot", "key": "...", "decision": "...", "retry_after_secs": number \| null}` | Whenever the rate limiter or honeypot makes a decision. `decision` is one of `allowed`, `limited`, `banned`, `blocked`, `allow_listed` (rate limiter) or `blocked`, `trapped` (honeypot). |
+
+**Example**
+
+```sh
+websocat ws://localhost:3000/dashboard/ws
+```
+
+```json
+{"type":"event","timestamp_ms":1785833978238,"source":"rate_limit","key":"127.0.0.1","decision":"banned","retry_after_secs":47}
+```
+
 ## `GET /delay/{ms}`
 
 Waits `ms` milliseconds before responding, to simulate a slow page load.

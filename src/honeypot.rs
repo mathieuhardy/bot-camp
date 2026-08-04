@@ -9,11 +9,13 @@ use std::time::Instant;
 
 use dashmap::DashMap;
 use serde::Deserialize;
+use serde::Serialize;
 
+use crate::dashboard::HoneypotKeyEntry;
 use crate::rate_limit::KeyStrategy;
 
 /// Runtime-configurable honeypot policy.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct HoneypotConfig {
     /// How a client is identified: by IP, `User-Agent`, or both.
     pub(crate) key_strategy: KeyStrategy,
@@ -109,6 +111,21 @@ impl HoneypotState {
             },
         }
     }
+
+    /// Returns every key currently banned, for the dashboard.
+    pub(crate) fn snapshot(&self) -> Vec<HoneypotKeyEntry> {
+        let now = Instant::now();
+
+        self.banned
+            .iter()
+            .filter(|entry| now < *entry.value())
+            .map(|entry| HoneypotKeyEntry {
+                key: entry.key().clone(),
+                banned: true,
+                retry_after_secs: Some((*entry.value() - now).as_secs().max(1)),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -164,6 +181,29 @@ mod tests {
         state.spring("a").await;
 
         assert!(state.retry_after_secs("b").is_none());
+    }
+
+    #[tokio::test]
+    async fn snapshot_lists_a_key_after_it_springs_the_trap() {
+        let state = state_with(1000);
+
+        state.spring("a").await;
+
+        let keys = state.snapshot();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].key, "a");
+        assert!(keys[0].banned);
+        assert!(keys[0].retry_after_secs.is_some());
+    }
+
+    #[tokio::test]
+    async fn snapshot_omits_an_expired_ban() {
+        let state = state_with(50);
+
+        state.spring("a").await;
+        tokio::time::sleep(Duration::from_millis(80)).await;
+
+        assert!(state.snapshot().is_empty());
     }
 
     #[tokio::test]

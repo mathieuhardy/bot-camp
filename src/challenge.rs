@@ -9,6 +9,7 @@
 use axum::http::HeaderMap;
 use axum::http::header::COOKIE;
 use serde::Deserialize;
+use serde::Serialize;
 
 /// Name of the cookie a solved challenge sets.
 pub(crate) const COOKIE_NAME: &str = "botcamp_challenge";
@@ -17,7 +18,7 @@ pub(crate) const COOKIE_NAME: &str = "botcamp_challenge";
 pub(crate) const COOKIE_VALUE: &str = "ok";
 
 /// Runtime-configurable challenge policy.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct ChallengeConfig {
     /// Delay, in milliseconds, before the challenge page's script sets
     /// the validation cookie and reloads.

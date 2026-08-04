@@ -5,9 +5,10 @@ use std::time::Duration;
 use std::time::Instant;
 
 use serde::Deserialize;
+use serde::Serialize;
 
 /// A rate limiting algorithm and its parameters.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "algorithm", rename_all = "snake_case")]
 pub(crate) enum Algorithm {
     /// Allows bursts up to `capacity` requests, then refills at

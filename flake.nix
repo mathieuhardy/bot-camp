@@ -24,6 +24,7 @@
           (pkgs.rust-bin.nightly.latest.default)
           pkgs.pkg-config
           pkgs.fuse3
+          pkgs.nodejs_22
         ];
       };
     };

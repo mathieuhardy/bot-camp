@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::challenge::ChallengeState;
+use crate::dashboard::DashboardState;
 use crate::honeypot::HoneypotState;
 use crate::rate_limit::RateLimitState;
 
@@ -28,6 +29,9 @@ pub(crate) struct AppState {
     /// JS challenge configuration — no per-key state, since passing the
     /// gate depends only on the request's cookie.
     pub(crate) challenge: Arc<ChallengeState>,
+
+    /// Live event feed consumed by the dashboard.
+    pub(crate) dashboard: Arc<DashboardState>,
 }
 
 impl Default for AppState {
@@ -37,6 +41,7 @@ impl Default for AppState {
             rate_limit: Arc::new(RateLimitState::default()),
             honeypot: Arc::new(HoneypotState::default()),
             challenge: Arc::new(ChallengeState::default()),
+            dashboard: Arc::new(DashboardState::default()),
         }
     }
 }

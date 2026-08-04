@@ -15,12 +15,15 @@ use std::time::Instant;
 
 use dashmap::DashMap;
 use serde::Deserialize;
+use serde::Serialize;
 
 use algorithm::AlgorithmDecision;
 use algorithm::AlgorithmState;
 
+use crate::dashboard::RateLimitKeyEntry;
+
 /// Runtime-configurable rate limiting policy.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct RateLimitConfig {
     /// The algorithm to enforce, and its parameters.
     #[serde(flatten)]
@@ -98,6 +101,19 @@ impl RateLimitConfig {
 /// dedicated CIDR/pattern syntax to parse.
 fn matches_any(list: &[String], value: &str) -> bool {
     list.iter().any(|entry| value.contains(entry.as_str()))
+}
+
+/// Whether `banned_until` (if any) is still in the future relative to
+/// `now`, and the seconds remaining until then — shared by [`RateLimitState::status`]
+/// and [`RateLimitState::snapshot`].
+fn ban_status(banned_until: Option<Instant>, now: Instant) -> (bool, Option<u64>) {
+    match banned_until {
+        Some(banned_until) if now < banned_until => {
+            (true, Some((banned_until - now).as_secs().max(1)))
+        }
+
+        _ => (false, None),
+    }
 }
 
 /// Outcome of a rate limit check for one request.
@@ -227,25 +243,31 @@ impl RateLimitState {
             };
         };
 
-        let Some(banned_until) = state.banned_until else {
-            return KeyStatus {
-                banned: false,
-                retry_after_secs: None,
-            };
-        };
+        let (banned, retry_after_secs) = ban_status(state.banned_until, Instant::now());
 
-        let now = Instant::now();
-        if now < banned_until {
-            KeyStatus {
-                banned: true,
-                retry_after_secs: Some((banned_until - now).as_secs().max(1)),
-            }
-        } else {
-            KeyStatus {
-                banned: false,
-                retry_after_secs: None,
-            }
+        KeyStatus {
+            banned,
+            retry_after_secs,
         }
+    }
+
+    /// Returns every key currently tracked, for the dashboard.
+    pub(crate) fn snapshot(&self) -> Vec<RateLimitKeyEntry> {
+        let now = Instant::now();
+
+        self.keys
+            .iter()
+            .map(|entry| {
+                let (banned, retry_after_secs) = ban_status(entry.banned_until, now);
+
+                RateLimitKeyEntry {
+                    key: entry.key().clone(),
+                    banned,
+                    retry_after_secs,
+                    consecutive_violations: entry.consecutive_violations,
+                }
+            })
+            .collect()
     }
 }
 
@@ -413,6 +435,59 @@ mod tests {
 
         assert!(!status.banned);
         assert!(status.retry_after_secs.is_none());
+    }
+
+    #[tokio::test]
+    async fn snapshot_lists_a_key_after_it_is_checked() {
+        let state = state_with(
+            Algorithm::TokenBucket {
+                capacity: 1,
+                refill_per_sec: 0.001,
+            },
+            10,
+        );
+
+        state.check("a").await;
+
+        let keys = state.snapshot();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].key, "a");
+        assert!(!keys[0].banned);
+    }
+
+    #[tokio::test]
+    async fn snapshot_reports_a_banned_key() {
+        let state = state_with(
+            Algorithm::TokenBucket {
+                capacity: 1,
+                refill_per_sec: 0.001,
+            },
+            1,
+        );
+
+        state.check("a").await;
+        state.check("a").await;
+
+        let keys = state.snapshot();
+        assert_eq!(keys.len(), 1);
+        assert!(keys[0].banned);
+        assert!(keys[0].retry_after_secs.is_some());
+    }
+
+    #[tokio::test]
+    async fn snapshot_is_empty_after_reset() {
+        let state = state_with(
+            Algorithm::TokenBucket {
+                capacity: 1,
+                refill_per_sec: 0.001,
+            },
+            10,
+        );
+
+        state.check("a").await;
+        state.reset();
+
+        assert!(state.snapshot().is_empty());
     }
 
     #[test]

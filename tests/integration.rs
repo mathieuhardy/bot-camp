@@ -7,6 +7,7 @@ use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::Request;
 use axum::http::StatusCode;
+use futures_util::StreamExt;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
@@ -1337,4 +1338,128 @@ async fn canonical_can_duplicate_and_move_the_tag_into_the_body() {
 
     // Verify both duplicated links ended up in the body
     assert_eq!(body[head_end..].matches(r#"href="/page""#).count(), 2);
+}
+
+#[tokio::test]
+async fn dashboard_index_serves_the_embedded_page() {
+    let request = Request::builder()
+        .uri("/dashboard")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get("content-type").unwrap(), "text/html");
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("<!doctype html>"));
+}
+
+#[tokio::test]
+async fn dashboard_assets_returns_404_for_an_unknown_path() {
+    let request = Request::builder()
+        .uri("/dashboard/does-not-exist.js")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn dashboard_snapshot_reflects_a_key_banned_by_a_prior_request() {
+    let router = app();
+
+    router
+        .clone()
+        .oneshot(configure_request(1, 1, "ip"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.40:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.40:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+
+    let request = Request::builder()
+        .uri("/dashboard/snapshot")
+        .body(Body::empty())
+        .unwrap();
+    let response = router.oneshot(request).await.unwrap();
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains(r#""key":"203.0.113.40""#));
+    assert!(body.contains(r#""banned":true"#));
+}
+
+#[tokio::test]
+async fn dashboard_ws_streams_the_snapshot_then_a_live_event() {
+    let router = app();
+
+    // A real socket is unavoidable here: a WebSocket upgrade needs an
+    // actual HTTP connection to hand off, which `oneshot` can't provide.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let serve_router = router.clone();
+    tokio::spawn(async move {
+        axum::serve(listener, serve_router.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    let (mut ws_stream, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/dashboard/ws"))
+        .await
+        .unwrap();
+
+    let snapshot = ws_stream.next().await.unwrap().unwrap();
+    assert!(
+        snapshot
+            .into_text()
+            .unwrap()
+            .contains(r#""type":"snapshot""#)
+    );
+
+    // Ban a key through the very same (Arc-shared) state, via an
+    // in-process request rather than another real connection. Capacity 1
+    // with a ban threshold of 1 means the first request is allowed (it
+    // consumes the only token) and the second is what bans the key — two
+    // events, in that order.
+    router
+        .clone()
+        .oneshot(configure_request(1, 1, "ip"))
+        .await
+        .unwrap();
+    router
+        .clone()
+        .oneshot(request_from("203.0.113.41:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    let banned = router
+        .oneshot(request_from("203.0.113.41:1", "/ratelimit/page"))
+        .await
+        .unwrap();
+    assert_eq!(banned.status(), StatusCode::FORBIDDEN);
+
+    let allowed_event = ws_stream.next().await.unwrap().unwrap();
+    assert!(
+        allowed_event
+            .into_text()
+            .unwrap()
+            .contains(r#""decision":"allowed""#)
+    );
+
+    let banned_event = ws_stream.next().await.unwrap().unwrap();
+    let text = banned_event.into_text().unwrap();
+    assert!(text.contains(r#""type":"event""#));
+    assert!(text.contains(r#""decision":"banned""#));
+    assert!(text.contains(r#""key":"203.0.113.41""#));
 }

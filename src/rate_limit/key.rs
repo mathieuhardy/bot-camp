@@ -4,9 +4,10 @@ use std::net::SocketAddr;
 
 use axum::http::HeaderMap;
 use serde::Deserialize;
+use serde::Serialize;
 
 /// How a client is identified for rate limiting purposes.
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum KeyStrategy {
     Ip,

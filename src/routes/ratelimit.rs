@@ -22,6 +22,9 @@ use axum::response::Response;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::dashboard::DashboardEvent;
+use crate::dashboard::EventSource;
+use crate::dashboard::now_ms;
 use crate::logging::with_rule;
 use crate::rate_limit::Decision;
 use crate::rate_limit::RateLimitConfig;
@@ -83,38 +86,59 @@ pub(crate) async fn enforce(
     let config = state.rate_limit.config().await;
     let ip = client_ip(request.headers(), peer);
     let ua = user_agent(request.headers());
+    let key = extract_key(config.key_strategy, request.headers(), peer);
 
     if config.is_blocked(&ip, &ua) {
+        publish(&state, &key, "blocked", None);
         return with_rule(StatusCode::FORBIDDEN.into_response(), "rate_limit_blocked");
     }
 
     if config.is_allow_listed(&ip, &ua) {
+        publish(&state, &key, "allow_listed", None);
         return next.run(request).await;
     }
 
-    let key = extract_key(config.key_strategy, request.headers(), peer);
-
     match state.rate_limit.check(&key).await {
-        Decision::Allowed => next.run(request).await,
+        Decision::Allowed => {
+            publish(&state, &key, "allowed", None);
+            next.run(request).await
+        }
 
-        Decision::Limited { retry_after_secs } => with_rule(
-            (
-                StatusCode::TOO_MANY_REQUESTS,
-                [(RETRY_AFTER, retry_after_secs.to_string())],
+        Decision::Limited { retry_after_secs } => {
+            publish(&state, &key, "limited", Some(retry_after_secs));
+            with_rule(
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [(RETRY_AFTER, retry_after_secs.to_string())],
+                )
+                    .into_response(),
+                "rate_limit_limited",
             )
-                .into_response(),
-            "rate_limit_limited",
-        ),
+        }
 
-        Decision::Banned { retry_after_secs } => with_rule(
-            (
-                StatusCode::FORBIDDEN,
-                [(RETRY_AFTER, retry_after_secs.to_string())],
+        Decision::Banned { retry_after_secs } => {
+            publish(&state, &key, "banned", Some(retry_after_secs));
+            with_rule(
+                (
+                    StatusCode::FORBIDDEN,
+                    [(RETRY_AFTER, retry_after_secs.to_string())],
+                )
+                    .into_response(),
+                "rate_limit_banned",
             )
-                .into_response(),
-            "rate_limit_banned",
-        ),
+        }
     }
+}
+
+/// Publishes `decision` for `key` to the dashboard's live event feed.
+fn publish(state: &AppState, key: &str, decision: &'static str, retry_after_secs: Option<u64>) {
+    state.dashboard.publish(DashboardEvent {
+        timestamp_ms: now_ms(),
+        source: EventSource::RateLimit,
+        key: key.to_string(),
+        decision,
+        retry_after_secs,
+    });
 }
 
 /// Playground page reached once a request clears [`enforce`] — any path

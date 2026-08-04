@@ -23,6 +23,9 @@ use axum::response::Response;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::dashboard::DashboardEvent;
+use crate::dashboard::EventSource;
+use crate::dashboard::now_ms;
 use crate::honeypot::HoneypotConfig;
 use crate::logging::with_rule;
 use crate::rate_limit::extract_key;
@@ -68,17 +71,31 @@ pub(crate) async fn enforce(
     };
 
     match state.honeypot.retry_after_secs(&key) {
-        Some(retry_after_secs) => with_rule(
-            (
-                StatusCode::FORBIDDEN,
-                [(RETRY_AFTER, retry_after_secs.to_string())],
+        Some(retry_after_secs) => {
+            publish(&state, &key, "blocked", Some(retry_after_secs));
+            with_rule(
+                (
+                    StatusCode::FORBIDDEN,
+                    [(RETRY_AFTER, retry_after_secs.to_string())],
+                )
+                    .into_response(),
+                "honeypot_banned",
             )
-                .into_response(),
-            "honeypot_banned",
-        ),
+        }
 
         None => next.run(request).await,
     }
+}
+
+/// Publishes `decision` for `key` to the dashboard's live event feed.
+fn publish(state: &AppState, key: &str, decision: &'static str, retry_after_secs: Option<u64>) {
+    state.dashboard.publish(DashboardEvent {
+        timestamp_ms: now_ms(),
+        source: EventSource::Honeypot,
+        key: key.to_string(),
+        decision,
+        retry_after_secs,
+    });
 }
 
 /// The trap itself: any path under `/honeypot/` lands here once past
@@ -99,6 +116,9 @@ pub async fn trap(
         extract_key(config.key_strategy, &headers, peer)
     };
     state.honeypot.spring(&key).await;
+
+    let retry_after_secs = state.honeypot.retry_after_secs(&key);
+    publish(&state, &key, "trapped", retry_after_secs);
 
     with_rule(
         format!("ok: /honeypot/{path}").into_response(),
