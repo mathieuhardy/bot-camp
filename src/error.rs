@@ -11,6 +11,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Errors that can occur in the bot-camp server.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// `POST /response` was given both `body` and `page` — they're
+    /// mutually exclusive ways of describing the response body.
+    #[error("body and page are mutually exclusive")]
+    ConflictingBody,
+
     /// The requested value isn't a valid HTTP header name.
     #[error(transparent)]
     InvalidHeaderName(#[from] axum::http::header::InvalidHeaderName),
@@ -43,6 +48,7 @@ pub enum Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status = match &self {
+            Error::ConflictingBody => StatusCode::BAD_REQUEST,
             Error::InvalidHeaderName(_) => StatusCode::BAD_REQUEST,
             Error::InvalidHeaderValue(_) => StatusCode::BAD_REQUEST,
             Error::InvalidRedirectCode(_) => StatusCode::BAD_REQUEST,

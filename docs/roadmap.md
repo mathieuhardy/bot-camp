@@ -180,7 +180,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 
 ### Phase 8 — Bonus
 
-- [ ] Generic API allowing to configure status code, response headers, etc.
+- [x] Generic API allowing to configure status code, response headers, etc. (`POST /response` : un seul endpoint JSON composant `status`/`headers` (répétables, comme `/headers/set`)/`delay_ms` avec soit un `body` brut, soit un `page` — le même `PageContext` que `/canonical`, `/content`, `/js-render`, `/broken-html`, `/robots/meta`, etc., désormais aussi `Deserialize`. `body` et `page` mutuellement exclusifs → `400`. Volontairement hors scope : rate limiting/honeypot/challenge (mécanismes à état, pas une forme de réponse), `/auth/basic`, `/normalize`, le double-encodage d'`/encoding`, le padding d'`/large-response`)
 - [x] Discovery d'urls (dans html) (`GET /discovery` : nombre fixe d'URLs déterministes `/discovery/target/{n}`, réparties par défaut sur 11 mécanismes HTML — `<a>`, `<link>`, `<img>`, `<script src>`, commentaire HTML, chaîne JS, `url()` CSS, href protocol-relative, `<form action>`, `<iframe>`, `<area>` — configurables via `count`/`forms` ; `GET /discovery/target/{n}` répond toujours `200` pour distinguer, via les logs, extraction et fetch réel)
 
 **Difficulté : élevée**, mais surtout par le volume de travail (pas par la complexité algorithmique) — c'est la phase "produit fini, prêt à distribuer".

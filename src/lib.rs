@@ -92,6 +92,7 @@ pub fn app() -> Router {
         .route("/redirect/meta-refresh", get(routes::redirect_meta_refresh))
         .route("/redirect/refresh", get(routes::redirect_refresh))
         .route("/redirect/{code}", get(routes::redirect))
+        .route("/response", post(routes::response))
         .route(
             "/robots.txt",
             get(routes::robots_txt).put(routes::set_robots_txt),

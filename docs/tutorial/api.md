@@ -1256,6 +1256,61 @@ content-length: 0
 
 ```
 
+## `POST /response`
+
+The generic, ultra-configurable endpoint: describe a status code,
+arbitrary headers, a delay, and a body in one JSON request, composing
+what most of the single-purpose endpoints above each do separately —
+handy when a test case needs several of them at once (e.g. a `noindex`
+robots meta tag *and* a conflicting `X-Robots-Tag` header *and* a
+duplicated canonical, all on one page) without a dedicated route.
+
+Deliberately **not** covered: rate limiting, honeypot, the JS challenge
+(all stateful, key-tracked mechanisms — not a single response to
+describe), `/auth/basic`, `/normalize`, `/encoding`'s double-encoding,
+`/large-response`'s padding. Use those endpoints directly for those
+cases.
+
+**Request**
+
+Body: JSON object. Every field is optional.
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | `u16` | Optional, defaults to `200`. Any value from 100 to 999, per `/status/{code}`. |
+| `headers` | array of `{"name": string, "value": string}` | Optional, defaults to `[]`. Applied in order — repeat a `name` to produce several header lines, the same way `/headers/set` does. |
+| `delay_ms` | `u64` | Optional, defaults to `0`. Waited before responding, like `/delay/{ms}`. |
+| `body` | string | Optional. Sent verbatim as the response body. Mutually exclusive with `page`. |
+| `page` | object | Optional. A full page description, rendered through the same shared HTML skeleton as `/canonical`, `/content`, `/js-render`, `/broken-html`, `/robots/meta`, etc. Mutually exclusive with `body`. Fields: `titles`, `h1`, `canonical_in_head`, `canonical_in_body` (arrays of string); `og_url`, `refresh`, `deferred_script`, `charset`, `raw_head`, `raw_body` (string or omitted); `meta_robots` (array of string); `body` (string, the visible page text). |
+
+If `page` is given and no `content-type` header is set explicitly, one
+is added for you (`text/html; charset=utf-8`) — an explicit `content-type`
+entry in `headers` always wins instead, with no duplicate header line.
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `{status}` | `body` verbatim, or `page` rendered as HTML, or empty | The request was valid. |
+| `400 Bad Request` | Error message | `status` isn't 100-999, a header name/value is invalid, or both `body` and `page` were given. |
+
+**Example**
+
+```sh
+curl -s -X POST http://localhost:3000/response \
+  -H 'content-type: application/json' \
+  -d '{
+    "status": 200,
+    "headers": [{"name": "x-robots-tag", "value": "noindex"}],
+    "page": {
+      "titles": ["Test page"],
+      "h1": ["Hello"],
+      "meta_robots": ["noindex"],
+      "raw_body": "<a href=\"/discovery/target/0\">extra link</a>"
+    }
+  }'
+```
+
 ## `GET /robots.txt`
 
 Returns the `robots.txt` contents currently held in memory. Unlike every

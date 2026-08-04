@@ -2,6 +2,7 @@
 
 use minijinja::AutoEscape;
 use minijinja::Environment;
+use serde::Deserialize;
 use serde::Serialize;
 
 /// Name under which the shared page skeleton is registered.
@@ -13,52 +14,67 @@ const TEMPLATE_NAME: &str = "page.html";
 /// optional charset meta tag, and raw markup spliced into the head/body.
 const TEMPLATE_SOURCE: &str = include_str!("../templates/page.html");
 
-/// Values interpolated into the shared page skeleton.
-#[derive(Default, Serialize)]
+/// Values interpolated into the shared page skeleton. Every field is
+/// optional when deserialized (defaults to its `Default` value), so a
+/// caller building one from JSON — see `routes/response.rs` — only needs
+/// to spell out what it actually wants to set.
+#[derive(Default, Deserialize, Serialize)]
 pub(crate) struct PageContext {
     /// `<title>` contents to render, one tag per entry — zero to omit
     /// the tag entirely.
+    #[serde(default)]
     pub(crate) titles: Vec<String>,
 
     /// Canonical link hrefs to render inside `<head>`.
+    #[serde(default)]
     pub(crate) canonical_in_head: Vec<String>,
 
     /// Canonical link hrefs to render inside `<body>`, to simulate an
     /// invalid placement.
+    #[serde(default)]
     pub(crate) canonical_in_body: Vec<String>,
 
     /// `og:url` meta tag content, if any.
+    #[serde(default)]
     pub(crate) og_url: Option<String>,
 
     /// `meta http-equiv="refresh"` content attribute, if any.
+    #[serde(default)]
     pub(crate) refresh: Option<String>,
 
     /// `meta name="robots"` content attribute values to render, one tag
     /// per entry.
+    #[serde(default)]
     pub(crate) meta_robots: Vec<String>,
 
     /// `<h1>` contents to render, one tag per entry — zero to omit the
     /// tag entirely.
+    #[serde(default)]
     pub(crate) h1: Vec<String>,
 
     /// Body text.
+    #[serde(default)]
     pub(crate) body: String,
 
     /// JavaScript statements to run, inserted verbatim (not
     /// HTML-escaped, since it's JS source rather than HTML text) inside
     /// a `<script>` tag, alongside an empty `#js-content` element for
     /// that script to populate.
+    #[serde(default)]
     pub(crate) deferred_script: Option<String>,
 
     /// `<meta charset>` value, if any.
+    #[serde(default)]
     pub(crate) charset: Option<String>,
 
     /// Raw markup inserted verbatim (not HTML-escaped) into `<head>`,
     /// to construct deliberately malformed HTML.
+    #[serde(default)]
     pub(crate) raw_head: Option<String>,
 
     /// Raw markup inserted verbatim (not HTML-escaped) into `<body>`,
     /// to construct deliberately malformed HTML.
+    #[serde(default)]
     pub(crate) raw_body: Option<String>,
 }
 

@@ -1574,3 +1574,134 @@ async fn discovery_escapes_a_malicious_host_header_in_the_protocol_relative_url(
     assert!(!body.contains("<script>alert(1)</script>"));
     assert!(body.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
 }
+
+fn response_request(json_body: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/response")
+        .header("content-type", "application/json")
+        .body(Body::from(json_body.to_string()))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn response_defaults_to_200_with_an_empty_body() {
+    let response = app().oneshot(response_request("{}")).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert!(body.is_empty());
+}
+
+#[tokio::test]
+async fn response_honors_the_requested_status_code() {
+    let response = app()
+        .oneshot(response_request(r#"{"status":404}"#))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn response_rejects_an_out_of_range_status_code() {
+    let response = app()
+        .oneshot(response_request(r#"{"status":0}"#))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn response_sets_repeated_and_custom_headers() {
+    let body = r#"{"headers":[{"name":"x-foo","value":"bar"},{"name":"x-foo","value":"baz"}]}"#;
+    let response = app().oneshot(response_request(body)).await.unwrap();
+
+    let values: Vec<_> = response.headers().get_all("x-foo").iter().collect();
+    assert_eq!(values, vec!["bar", "baz"]);
+}
+
+#[tokio::test]
+async fn response_rejects_an_invalid_header_name() {
+    let body = r#"{"headers":[{"name":"bad header","value":"x"}]}"#;
+    let response = app().oneshot(response_request(body)).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn response_waits_for_the_requested_delay() {
+    let start = Instant::now();
+
+    let response = app()
+        .oneshot(response_request(r#"{"delay_ms":20}"#))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(start.elapsed().as_millis() >= 20);
+}
+
+#[tokio::test]
+async fn response_sends_a_raw_body_verbatim() {
+    let response = app()
+        .oneshot(response_request(r#"{"body":"plain text, not HTML"}"#))
+        .await
+        .unwrap();
+
+    // A raw `body` gets `String`'s own default content-type, not the
+    // `text/html` one `page` would trigger.
+    assert_eq!(
+        response.headers().get("content-type").unwrap(),
+        "text/plain; charset=utf-8"
+    );
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(body.as_ref(), b"plain text, not HTML");
+}
+
+#[tokio::test]
+async fn response_rejects_body_and_page_given_together() {
+    let body = r#"{"body":"x","page":{"h1":["y"]}}"#;
+    let response = app().oneshot(response_request(body)).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn response_composes_status_headers_and_a_full_page() {
+    let body = r#"{
+        "status": 200,
+        "headers": [{"name": "x-robots-tag", "value": "noindex"}],
+        "page": {
+            "titles": ["Test page"],
+            "h1": ["Hello"],
+            "canonical_in_head": ["/canonical-target"],
+            "meta_robots": ["noindex"],
+            "og_url": "https://example.com/og",
+            "body": "some text",
+            "raw_body": "<a href=\"/discovery/target/0\">extra link</a>"
+        }
+    }"#;
+
+    let response = app().oneshot(response_request(body)).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers().get("x-robots-tag").unwrap(), "noindex");
+    assert_eq!(
+        response.headers().get("content-type").unwrap(),
+        "text/html; charset=utf-8"
+    );
+
+    let html = response.into_body().collect().await.unwrap().to_bytes();
+    let html = String::from_utf8(html.to_vec()).unwrap();
+    assert!(html.contains("<title>Test page</title>"));
+    assert!(html.contains("<h1>Hello</h1>"));
+    assert!(html.contains(r#"href="/canonical-target""#));
+    assert!(html.contains(r#"<meta name="robots" content="noindex">"#));
+    assert!(html.contains(r#"content="https://example.com/og""#));
+    assert!(html.contains("some text"));
+    assert!(html.contains(r#"<a href="/discovery/target/0">extra link</a>"#));
+}
