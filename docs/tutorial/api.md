@@ -1,8 +1,7 @@
 # API reference
 
-Every route exposed by bot-camp, documented in full. This file is updated
-as each roadmap phase (see the [README](../../README.md)) adds new
-routes.
+Every route exposed by bot-camp, documented in full. See the
+[root README](../../README.md) for a feature overview.
 
 ## `GET /auth/basic`
 

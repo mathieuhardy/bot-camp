@@ -8,7 +8,7 @@ structure:
   request against the server.
 - **[API reference](./api.md)** — every route, documented in full.
 
-The project is currently in early development (see the roadmap in the
-[README](../../README.md)). This documentation grows alongside the feature
-set — right now it covers the skeleton (`GET /health`) and the CI/Docker
-setup around it.
+See the [root README](../../README.md) for a feature overview and quick
+start. This documentation grows alongside the feature set; the
+[API reference](./api.md) is always the source of truth for what's
+currently available.

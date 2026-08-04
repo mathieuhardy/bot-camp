@@ -80,10 +80,12 @@ content-length: 0
 
 ## What's next
 
-bot-camp is still early: `/health`, `/status/{code}`, `/headers/echo` and
-`/headers/set` are the only routes so far. As routes for redirects,
-robots.txt, rate limiting, and HTML content scenarios are implemented
-(see the [roadmap](../../README.md)), this tutorial will grow to walk
-through each family one by one. Until then, the
+This tutorial only walks through `/health`, `/status/{code}`, and
+`/headers/*` so far, but bot-camp has grown well beyond that —
+redirects, canonical tags, robots.txt, rate limiting, anti-bot
+mechanisms, HTML/JS content scenarios, URL discovery, a generic
+`POST /response` endpoint, and a live dashboard. This tutorial will
+grow to walk through each family one by one; until then, the
 [API reference](./api.md) is the source of truth for what's currently
-available.
+available, and the [root README](../../README.md) gives a feature
+overview.
