@@ -430,6 +430,68 @@ content-length: 0
 
 ```
 
+## `GET /discovery`
+
+Returns an HTML page carrying a fixed, deterministic set of target URLs
+(`/discovery/target/0`, `/discovery/target/1`, ...) spread across every
+common — and not so common — HTML mechanism a crawler might need to
+extract links from: `<a href>`, `<link href>`, `<img src>`,
+`<script src>`, an HTML comment, a URL as a JS string literal, a CSS
+`url()`, a protocol-relative `href`, `<form action>`, `<iframe src>`, and
+`<area href>`. Point your crawler at it and compare what it actually
+discovered against the known list.
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `count` | query, `u32` | Optional, defaults to one URL per supported form (currently 11). How many target URLs to generate, numbered from 0. |
+| `forms` | query, comma-separated string | Optional, defaults to every form. Which mechanisms to cycle through, by name: `a`, `link`, `img`, `script`, `comment`, `js`, `css`, `protocol_relative`, `form`, `iframe`, `area`. Unrecognized names are dropped; if none are recognized (or the list is empty), every form is used. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | The rendered HTML page | Always — the handler cannot fail. |
+
+**Examples**
+
+```sh
+curl -s "http://localhost:3000/discovery" | grep -o 'target [0-9]*'
+```
+
+```sh
+curl -s "http://localhost:3000/discovery?count=4&forms=a,img"
+```
+
+## `GET /discovery/target/{n}`
+
+The target a discovered URL actually points at. Always succeeds — used
+to confirm not just that a crawler *extracted* a URL, but that it
+actually *fetched* it (cross-check against bot-camp's request logs).
+
+**Request**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `n` | path, `u32` | The target's index — matches the number in the URL `/discovery` generated. |
+
+**Response**
+
+| Status | Body | When |
+|---|---|---|
+| `200 OK` | `ok: /discovery/target/{n}` | Always — the handler cannot fail. |
+
+**Example**
+
+```sh
+curl -s http://localhost:3000/discovery/target/3
+```
+
+```
+ok: /discovery/target/3
+```
+
 ## `GET /encoding`
 
 Returns an HTML page whose declared charsets — the `Content-Type`

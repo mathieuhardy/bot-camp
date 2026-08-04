@@ -181,8 +181,7 @@ C'est la partie qui n'existe pas vraiment sur crawler-test.com et qui a le plus 
 ### Phase 8 — Bonus
 
 - [ ] Generic API allowing to configure status code, response headers, etc.
-- [ ] Discovery d'urls (dans html).
-- [ ] Setters for robots.txt, etc.
+- [x] Discovery d'urls (dans html) (`GET /discovery` : nombre fixe d'URLs déterministes `/discovery/target/{n}`, réparties par défaut sur 11 mécanismes HTML — `<a>`, `<link>`, `<img>`, `<script src>`, commentaire HTML, chaîne JS, `url()` CSS, href protocol-relative, `<form action>`, `<iframe>`, `<area>` — configurables via `count`/`forms` ; `GET /discovery/target/{n}` répond toujours `200` pour distinguer, via les logs, extraction et fetch réel)
 
 **Difficulté : élevée**, mais surtout par le volume de travail (pas par la complexité algorithmique) — c'est la phase "produit fini, prêt à distribuer".
 

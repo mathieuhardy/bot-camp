@@ -72,6 +72,8 @@ pub fn app() -> Router {
         .route("/dashboard/ws", get(routes::dashboard_ws))
         .route("/dashboard/{*path}", get(routes::dashboard_assets))
         .route("/delay/{ms}", get(routes::delay))
+        .route("/discovery", get(routes::discovery))
+        .route("/discovery/target/{n}", get(routes::discovery_target))
         .route("/encoding", get(routes::encoding))
         .route("/headers/echo", get(routes::echo))
         .route("/headers/set", get(routes::set))

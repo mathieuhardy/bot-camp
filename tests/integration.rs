@@ -1463,3 +1463,114 @@ async fn dashboard_ws_streams_the_snapshot_then_a_live_event() {
     assert!(text.contains(r#""decision":"banned""#));
     assert!(text.contains(r#""key":"203.0.113.41""#));
 }
+
+#[tokio::test]
+async fn discovery_uses_every_form_by_default() {
+    let request = Request::builder()
+        .uri("/discovery")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains(r#"<a href="/discovery/target/0">target 0</a>"#));
+    assert!(body.contains(r#"<link rel="alternate" href="/discovery/target/1">"#));
+    assert!(body.contains(r#"<img src="/discovery/target/2" alt="target 2">"#));
+    assert!(body.contains(r#"<script src="/discovery/target/3"></script>"#));
+    assert!(body.contains(r#"<!-- <a href="/discovery/target/4">target 4</a> -->"#));
+    assert!(body.contains(r#"var target_5 = "/discovery/target/5";"#));
+    assert!(body.contains("background-image: url(/discovery/target/6);"));
+    assert!(body.contains(r#"href="//localhost:3000/discovery/target/7""#));
+    assert!(body.contains(r#"<form action="/discovery/target/8"></form>"#));
+    assert!(body.contains(r#"<iframe src="/discovery/target/9"></iframe>"#));
+    assert!(body.contains(r#"<area href="/discovery/target/10""#));
+
+    // count defaults to exactly one URL per form — no twelfth target
+    assert!(!body.contains("/discovery/target/11"));
+}
+
+#[tokio::test]
+async fn discovery_count_controls_how_many_urls_are_generated() {
+    let request = Request::builder()
+        .uri("/discovery?count=3")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains("/discovery/target/0"));
+    assert!(body.contains("/discovery/target/2"));
+    assert!(!body.contains("/discovery/target/3"));
+}
+
+#[tokio::test]
+async fn discovery_forms_param_restricts_and_cycles_through_the_given_forms() {
+    let request = Request::builder()
+        .uri("/discovery?count=4&forms=a,img")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains(r#"<a href="/discovery/target/0">target 0</a>"#));
+    assert!(body.contains(r#"<img src="/discovery/target/1" alt="target 1">"#));
+    assert!(body.contains(r#"<a href="/discovery/target/2">target 2</a>"#));
+    assert!(body.contains(r#"<img src="/discovery/target/3" alt="target 3">"#));
+    assert!(!body.contains("<link"));
+    assert!(!body.contains("<script"));
+}
+
+#[tokio::test]
+async fn discovery_falls_back_to_every_form_when_none_are_recognized() {
+    let request = Request::builder()
+        .uri("/discovery?count=1&forms=bogus")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(body.contains(r#"<a href="/discovery/target/0">target 0</a>"#));
+}
+
+#[tokio::test]
+async fn discovery_target_acknowledges_any_index() {
+    let request = Request::builder()
+        .uri("/discovery/target/42")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert_eq!(body, "ok: /discovery/target/42");
+}
+
+#[tokio::test]
+async fn discovery_escapes_a_malicious_host_header_in_the_protocol_relative_url() {
+    let request = Request::builder()
+        .uri("/discovery?count=1&forms=protocol_relative")
+        .header("host", "evil.com\"><script>alert(1)</script>")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app().oneshot(request).await.unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+
+    assert!(!body.contains("<script>alert(1)</script>"));
+    assert!(body.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+}
